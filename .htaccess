@@ -1,17 +1,12 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /gh_software_solution/
 
-    # Block direct access to the system folder
-    RewriteCond %{REQUEST_URI} ^system.*
-    RewriteRule ^(.*)$ /gh_software_solution/index.php?/$1 [L]
-
-    # Route everything else through index.php, unless it's a real file or directory
+    # Route everything through index.php, unless it's a real file or directory
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^(.*)$ index.php?/$1 [L]
 </IfModule>
 
 <IfModule !mod_rewrite.c>
-    ErrorDocument 404 /gh_software_solution/index.php
+    ErrorDocument 404 index.php
 </IfModule>
