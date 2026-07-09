@@ -1,0 +1,402 @@
+/* ================================================================
+   GH Software Solution — Shared Stylesheet
+   Covers: Admin Layout (sidebar + topbar) and Login page
+================================================================ */
+
+/* ── CSS Variables ───────────────────────────────────────────── */
+:root {
+    --sidebar-w:      260px;
+    --sidebar-bg:     #1a2442;
+    --sidebar-hover:  rgba(255,255,255,0.06);
+    --sidebar-active: #4361ee;
+    --sidebar-text:   #a8b4cf;
+    --topbar-h:       62px;
+    --body-bg:        #f0f2f8;
+    --accent:         #4361ee;
+    --accent-dark:    #3451d1;
+    --card-radius:    14px;
+    --card-shadow:    0 2px 12px rgba(0,0,0,.07);
+}
+
+/* ── Base Reset ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    margin: 0;
+}
+
+/* ================================================================
+   ADMIN LAYOUT
+================================================================ */
+
+/* Body override for the admin dashboard */
+body.admin-body {
+    background: var(--body-bg);
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────── */
+#sidebar {
+    width: var(--sidebar-w);
+    min-height: 100vh;
+    background: var(--sidebar-bg);
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    transition: transform .28s ease;
+    overflow-x: hidden;
+}
+
+.sb-brand {
+    padding: 18px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.sb-brand .logo-box {
+    width: 38px;
+    height: 38px;
+    background: var(--accent);
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sb-brand .brand-name {
+    color: #fff;
+    font-weight: 700;
+    font-size: .95rem;
+    line-height: 1.1;
+}
+
+.sb-brand .brand-sub {
+    color: var(--sidebar-text);
+    font-size: .68rem;
+    letter-spacing: .5px;
+}
+
+/* ── Sidebar User Info ───────────────────────────────────────── */
+.sb-user {
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.sb-user .u-avatar {
+    width: 40px;
+    height: 40px;
+    background: rgba(67,97,238,.35);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-weight: 700;
+    font-size: .85rem;
+    color: #8ba4f8;
+}
+
+.sb-user .u-name {
+    color: #e4e9f5;
+    font-weight: 600;
+    font-size: .84rem;
+    margin-bottom: 3px;
+}
+
+.sb-user .u-badge {
+    font-size: .66rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+/* ── Sidebar Navigation ──────────────────────────────────────── */
+.sb-nav {
+    flex: 1;
+    padding: 8px 0;
+    overflow-y: auto;
+}
+
+.sb-nav::-webkit-scrollbar { width: 4px; }
+.sb-nav::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,.1);
+    border-radius: 4px;
+}
+
+.nav-section {
+    color: rgba(168,180,207,.45);
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    padding: 14px 22px 4px;
+}
+
+.sb-nav .nav-link {
+    color: var(--sidebar-text);
+    padding: 9px 22px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    font-size: .85rem;
+    border-left: 3px solid transparent;
+    transition: color .18s, background .18s, border-color .18s;
+    border-radius: 0;
+}
+
+.sb-nav .nav-link .ni {
+    width: 17px;
+    text-align: center;
+    font-size: .9rem;
+}
+
+.sb-nav .nav-link:hover {
+    color: #e4e9f5;
+    background: var(--sidebar-hover);
+}
+
+.sb-nav .nav-link.active {
+    color: #fff;
+    background: rgba(67,97,238,.22);
+    border-left-color: var(--accent);
+}
+
+.sb-nav .nav-link.disabled-link {
+    opacity: .42;
+    pointer-events: none;
+    cursor: default;
+}
+
+/* ── Sidebar Sub-menu ─────────────────────────────────────────── */
+.sb-nav .nav-sub {
+    padding-left: 2.6rem;
+    font-size: .83rem;
+}
+
+.sb-nav .sb-chevron {
+    transition: transform .2s ease;
+}
+
+.sb-nav .sb-chevron.rotated {
+    transform: rotate(-180deg);
+}
+
+/* ── Sidebar Footer ──────────────────────────────────────────── */
+.sb-footer {
+    border-top: 1px solid rgba(255,255,255,.07);
+    padding: 8px 0;
+}
+
+/* ── Main Content Wrapper ────────────────────────────────────── */
+#main-wrap {
+    margin-left: var(--sidebar-w);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Topbar ──────────────────────────────────────────────────── */
+#topbar {
+    height: var(--topbar-h);
+    background: #fff;
+    box-shadow: 0 1px 0 rgba(0,0,0,.07);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 999;
+}
+
+/* ── Page Content Area ───────────────────────────────────────── */
+#page-content {
+    padding: 24px;
+    flex: 1;
+}
+
+/* ── Page Header ─────────────────────────────────────────────── */
+.page-header h4 {
+    font-weight: 700;
+    color: #1a2442;
+    margin-bottom: 4px;
+}
+
+/* ── Stat Cards ──────────────────────────────────────────────── */
+.stat-card {
+    border: none;
+    border-radius: var(--card-radius);
+    box-shadow: var(--card-shadow);
+    transition: transform .2s, box-shadow .2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.1);
+}
+
+.stat-card .icon-wrap {
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+}
+
+/* ── DataTable / General Card ────────────────────────────────── */
+.dt-card {
+    border: none;
+    border-radius: var(--card-radius);
+    box-shadow: var(--card-shadow);
+}
+
+/* ── Avatar Initials (DataTable name cell) ───────────────────── */
+.avatar-initials::before {
+    content: attr(data-initials);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: .75rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* ================================================================
+   LOGIN PAGE
+================================================================ */
+
+body.login-body {
+    background: linear-gradient(145deg, #1a2442 0%, #2d3f7c 55%, #4361ee 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-wrapper {
+    width: 100%;
+    max-width: 430px;
+    padding: 16px;
+}
+
+.login-card {
+    border: none;
+    border-radius: 18px;
+    box-shadow: 0 24px 64px rgba(0,0,0,.35);
+    overflow: hidden;
+}
+
+.login-header {
+    background: #f8f9ff;
+    padding: 32px 36px 24px;
+    text-align: center;
+    border-bottom: 1px solid #eef0f8;
+}
+
+.login-header .logo-box {
+    width: 58px;
+    height: 58px;
+    background: var(--accent);
+    border-radius: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+    box-shadow: 0 6px 18px rgba(67,97,238,.35);
+}
+
+.login-body {
+    padding: 28px 36px 36px;
+}
+
+.login-body .form-control:focus,
+.login-body .form-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(67,97,238,.15);
+}
+
+.btn-login {
+    background: var(--accent);
+    border-color: var(--accent);
+    padding: 11px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    transition: background .18s, border-color .18s, transform .12s;
+}
+
+.btn-login:hover {
+    background: var(--accent-dark);
+    border-color: var(--accent-dark);
+    transform: translateY(-1px);
+}
+
+.btn-login:active {
+    transform: translateY(0);
+}
+
+.copyright {
+    text-align: center;
+    margin-top: 22px;
+    color: rgba(255,255,255,.45);
+    font-size: .78rem;
+}
+
+/* ================================================================
+   RESPONSIVE
+================================================================ */
+
+/* ── btn-xs utility (used in timesheet action column) ────────── */
+.btn-xs {
+    padding: .2rem .45rem;
+    font-size: .72rem;
+    line-height: 1.4;
+    border-radius: .25rem;
+}
+
+/* ── Timesheet table tweaks ──────────────────────────────────── */
+#timesheet-table td,
+#timesheet-table th {
+    vertical-align: middle;
+    font-size: .82rem;
+}
+
+/* ── Camera video fill ───────────────────────────────────────── */
+#camera-video,
+#camera-preview {
+    max-height: 320px;
+    object-fit: cover;
+    width: 100%;
+}
+
+@media (max-width: 991.98px) {
+    #sidebar {
+        transform: translateX(calc(-1 * var(--sidebar-w)));
+    }
+
+    #sidebar.open {
+        transform: translateX(0);
+    }
+
+    #main-wrap {
+        margin-left: 0;
+    }
+
+    #sidebar-overlay {
+        display: block !important;
+    }
+}
