@@ -5,6 +5,9 @@ class Attendance_model extends CI_Model {
 
     private $table = 'attendance';
 
+    // OT below 30 minutes does not count
+    const OT_MIN_HOURS = 0.5;
+
     // Shift schedule + mode come from system_settings (see Setting_model)
     private $cfg;
 
@@ -13,6 +16,8 @@ class Attendance_model extends CI_Model {
         $this->load->model('Setting_model');
         $this->cfg = $this->Setting_model->attendance_config();
         $this->_ensure_session_columns();
+        $this->_ensure_ot_columns();
+        $this->_ensure_off_status();
     }
 
     // Adds the AM/PM punch columns on first run after upgrade.
@@ -27,6 +32,41 @@ class Attendance_model extends CI_Model {
             ADD COLUMN `am_time_out_photo` VARCHAR(255) NULL,
             ADD COLUMN `pm_time_in_photo`  VARCHAR(255) NULL,
             ADD COLUMN `pm_time_out_photo` VARCHAR(255) NULL");
+    }
+
+    // Adds the OT approval columns on first run after upgrade.
+    private function _ensure_ot_columns() {
+        if ($this->db->field_exists('ot_status', $this->table)) return;
+        $this->db->query("ALTER TABLE `{$this->table}`
+            ADD COLUMN `ot_status`      VARCHAR(10) NULL DEFAULT NULL,
+            ADD COLUMN `ot_approved_by` INT NULL DEFAULT NULL,
+            ADD COLUMN `ot_approved_at` DATETIME NULL DEFAULT NULL");
+        // OT recorded before this feature existed still needs a decision
+        $this->db->query("UPDATE `{$this->table}` SET ot_status = 'pending'
+            WHERE overtime >= " . self::OT_MIN_HOURS);
+    }
+
+    // Adds the 'off' (rest day) status to the enum on first run after upgrade.
+    private function _ensure_off_status() {
+        $col = $this->db->query("SHOW COLUMNS FROM `{$this->table}` LIKE 'status'")->row_array();
+        if (!$col || strpos($col['Type'], "'off'") !== false) return;
+        $this->db->query("ALTER TABLE `{$this->table}`
+            MODIFY `status` ENUM('present','absent','half_day','holiday','leave','off')
+            NOT NULL DEFAULT 'present'");
+    }
+
+    // Overtime + approval state derived from a raw past-schedule duration
+    // (in hours). OT counts only from 30 minutes up, and any recompute
+    // resets the head/admin decision back to pending.
+    private function _ot_fields($raw_hours) {
+        $ot = round(max(0, $raw_hours), 2);
+        if ($ot < self::OT_MIN_HOURS) $ot = 0;
+        return [
+            'overtime'       => $ot,
+            'ot_status'      => $ot > 0 ? 'pending' : null,
+            'ot_approved_by' => null,
+            'ot_approved_at' => null,
+        ];
     }
 
     // ================================================================
@@ -160,18 +200,21 @@ class Attendance_model extends CI_Model {
 
         // OUT punches require today's record (guaranteed by can_punch)
         if ($punch === 'time_out') {
-            return $this->db->where('id', $rec['id'])->update($this->table, [
+            $data = [
                 'time_out'       => $now,
                 'time_out_photo' => $photo_path,
-                'total_hours'    => round(max(0, strtotime($now) - strtotime($rec['time_in'])) / 3600, 2),
-                'overtime'       => ($now > $this->cfg['day_out'])
-                    ? round((strtotime($now) - strtotime($this->cfg['day_out'])) / 3600, 2) : 0,
+                'total_hours'    => $this->_sched_hours($rec['time_in'], $now,
+                                        $this->cfg['day_in'], $this->cfg['day_out']),
                 'updated_at'     => date('Y-m-d H:i:s'),
-            ]);
+            ] + $this->_ot_fields(($now > $this->cfg['day_out'])
+                    ? (strtotime($now) - strtotime($this->cfg['day_out'])) / 3600 : 0);
+            return $this->db->where('id', $rec['id'])->update($this->table, $data);
         }
 
         $session       = $punch === 'am_out' ? 'am' : 'pm';
-        $session_hours = round(max(0, strtotime($now) - strtotime($rec[$session . '_time_in'])) / 3600, 2);
+        $session_hours = $this->_sched_hours(
+            $rec[$session . '_time_in'], $now,
+            $this->cfg[$session . '_in'], $this->cfg[$session . '_out']);
 
         $data = [
             $session . '_time_out'       => $now,
@@ -181,8 +224,9 @@ class Attendance_model extends CI_Model {
             'total_hours'                => round((float)$rec['total_hours'] + $session_hours, 2),
             'updated_at'                 => date('Y-m-d H:i:s'),
         ];
-        if ($punch === 'pm_out' && $now > $this->cfg['pm_out']) {
-            $data['overtime'] = round((strtotime($now) - strtotime($this->cfg['pm_out'])) / 3600, 2);
+        if ($punch === 'pm_out') {
+            $data += $this->_ot_fields(($now > $this->cfg['pm_out'])
+                ? (strtotime($now) - strtotime($this->cfg['pm_out'])) / 3600 : 0);
         }
         return $this->db->where('id', $rec['id'])->update($this->table, $data);
     }
@@ -202,6 +246,17 @@ class Attendance_model extends CI_Model {
         return ($time && $time > $sched_start)
             ? round((strtotime($time) - strtotime($sched_start)) / 60, 2)
             : 0;
+    }
+
+    // Hours worked inside the scheduled window only. Early clock-ins are
+    // clamped to the scheduled start and late clock-outs to the scheduled
+    // end, so a full day is fixed at the schedule's length (8 hrs) — time
+    // past the scheduled out is handled separately as overtime.
+    private function _sched_hours($in, $out, $sched_in, $sched_out) {
+        if (!$in || !$out) return 0;
+        $start = max(strtotime($in), strtotime($sched_in));
+        $end   = min(strtotime($out), strtotime($sched_out));
+        return round(max(0, $end - $start) / 3600, 2);
     }
 
     // ================================================================
@@ -279,24 +334,25 @@ class Attendance_model extends CI_Model {
         if ($this->cfg['mode'] === 'single') {
             if ($punch !== 'time_out') return false;
 
-            $total_hours = round(max(0, strtotime($now) - strtotime($rec['time_in'])) / 3600, 2);
-            $overtime    = ($now > $this->cfg['day_out'])
-                ? round((strtotime($now) - strtotime($this->cfg['day_out'])) / 3600, 2)
-                : 0;
+            $total_hours = $this->_sched_hours($rec['time_in'], $now,
+                $this->cfg['day_in'], $this->cfg['day_out']);
 
-            return $this->db->where('id', $rec['id'])->update($this->table, [
+            $data = [
                 'time_out'       => $now,
                 'time_out_photo' => $photo_path,
                 'total_hours'    => $total_hours,
-                'overtime'       => $overtime,
                 'updated_at'     => date('Y-m-d H:i:s'),
-            ]);
+            ] + $this->_ot_fields(($now > $this->cfg['day_out'])
+                    ? (strtotime($now) - strtotime($this->cfg['day_out'])) / 3600 : 0);
+            return $this->db->where('id', $rec['id'])->update($this->table, $data);
         }
 
         if ($punch !== 'am_out' && $punch !== 'pm_out') return false;
 
         $session       = $punch === 'am_out' ? 'am' : 'pm';
-        $session_hours = round(max(0, strtotime($now) - strtotime($rec[$session . '_time_in'])) / 3600, 2);
+        $session_hours = $this->_sched_hours(
+            $rec[$session . '_time_in'], $now,
+            $this->cfg[$session . '_in'], $this->cfg[$session . '_out']);
 
         $data = [
             $session . '_time_out'       => $now,
@@ -306,8 +362,9 @@ class Attendance_model extends CI_Model {
             'total_hours'                => round((float)$rec['total_hours'] + $session_hours, 2),
             'updated_at'                 => date('Y-m-d H:i:s'),
         ];
-        if ($punch === 'pm_out' && $now > $this->cfg['pm_out']) {
-            $data['overtime'] = round((strtotime($now) - strtotime($this->cfg['pm_out'])) / 3600, 2);
+        if ($punch === 'pm_out') {
+            $data += $this->_ot_fields(($now > $this->cfg['pm_out'])
+                ? (strtotime($now) - strtotime($this->cfg['pm_out'])) / 3600 : 0);
         }
         return $this->db->where('id', $rec['id'])->update($this->table, $data);
     }
@@ -347,7 +404,8 @@ class Attendance_model extends CI_Model {
         $end   = date('Y-m-t', strtotime($start));
         return $this->db
             ->select('SUM(total_hours) AS total_hours, SUM(tardiness) AS total_tardiness,
-                      SUM(overtime) AS total_overtime,
+                      SUM(CASE WHEN ot_status = "approved" THEN overtime ELSE 0 END) AS total_overtime,
+                      SUM(CASE WHEN ot_status = "pending"  THEN overtime ELSE 0 END) AS total_ot_pending,
                       SUM(CASE WHEN status="present" THEN 1 ELSE 0 END) AS days_present,
                       SUM(CASE WHEN status="absent"  THEN 1 ELSE 0 END) AS days_absent,
                       SUM(CASE WHEN status="leave"   THEN 1 ELSE 0 END) AS days_leave')
@@ -374,29 +432,39 @@ class Attendance_model extends CI_Model {
             $pm_in  = $data['pm_time_in']  ?? null;
             $pm_out = $data['pm_time_out'] ?? null;
 
-            $total = 0;
-            if ($am_in && $am_out) $total += max(0, strtotime($am_out) - strtotime($am_in)) / 3600;
-            if ($pm_in && $pm_out) $total += max(0, strtotime($pm_out) - strtotime($pm_in)) / 3600;
+            $total = $this->_sched_hours($am_in, $am_out, $this->cfg['am_in'], $this->cfg['am_out'])
+                   + $this->_sched_hours($pm_in, $pm_out, $this->cfg['pm_in'], $this->cfg['pm_out']);
 
             $data['total_hours'] = round($total, 2);
             $data['tardiness']   = round(
                 $this->_minutes_late($am_in, $this->cfg['am_in'])
                 + $this->_minutes_late($pm_in, $this->cfg['pm_in']), 2);
-            $data['overtime']    = ($pm_out && $pm_out > $this->cfg['pm_out'])
-                ? round((strtotime($pm_out) - strtotime($this->cfg['pm_out'])) / 3600, 2)
-                : 0;
+            $data = array_merge($data, $this->_ot_fields(($pm_out && $pm_out > $this->cfg['pm_out'])
+                ? (strtotime($pm_out) - strtotime($this->cfg['pm_out'])) / 3600 : 0));
             $data['time_in']  = $am_in  ?: $pm_in;
             $data['time_out'] = $pm_out ?: $am_out;
 
         } elseif (isset($data['time_in']) && isset($data['time_out']) && $data['time_in'] && $data['time_out']) {
-            $secs                = strtotime($data['time_out']) - strtotime($data['time_in']);
-            $data['total_hours'] = round(max(0, $secs) / 3600, 2);
+            $data['total_hours'] = $this->_sched_hours($data['time_in'], $data['time_out'],
+                $this->cfg['day_in'], $this->cfg['day_out']);
             $data['tardiness']   = $this->_minutes_late($data['time_in'], $this->cfg['day_in']);
-            $data['overtime']    = ($data['time_out'] > $this->cfg['day_out'])
-                ? round((strtotime($data['time_out']) - strtotime($this->cfg['day_out'])) / 3600, 2)
-                : 0;
+            $data = array_merge($data, $this->_ot_fields(($data['time_out'] > $this->cfg['day_out'])
+                ? (strtotime($data['time_out']) - strtotime($this->cfg['day_out'])) / 3600 : 0));
         }
         return $data;
+    }
+
+    // ================================================================
+    // OT Approval (head / admin)
+    // ================================================================
+
+    public function set_ot_status($id, $status, $admin_id) {
+        return $this->db->where('id', $id)->update($this->table, [
+            'ot_status'      => $status,
+            'ot_approved_by' => $admin_id,
+            'ot_approved_at' => date('Y-m-d H:i:s'),
+            'updated_at'     => date('Y-m-d H:i:s'),
+        ]);
     }
 
     public function update_record($id, $data) {
@@ -448,6 +516,26 @@ class Attendance_model extends CI_Model {
             ->get('week_confirmations')->result_array();
 
         return array_column($rows, 'week_start');
+    }
+
+    // Dates in [start, end] with no attendance row at all ("No Record" days).
+    // Every day of a period must carry a status (present/absent/leave/…)
+    // before the period can be confirmed for payroll.
+    public function get_missing_dates($user_id, $start, $end) {
+        $rows = $this->db
+            ->select('date')
+            ->where('user_id', $user_id)
+            ->where('date >=', $start)
+            ->where('date <=', $end)
+            ->get($this->table)->result_array();
+        $have = array_column($rows, 'date');
+
+        $missing = [];
+        for ($d = strtotime($start); $d <= strtotime($end); $d += 86400) {
+            $ds = date('Y-m-d', $d);
+            if (!in_array($ds, $have)) $missing[] = $ds;
+        }
+        return $missing;
     }
 
     public function confirm_week($user_id, $week_start, $admin_id) {

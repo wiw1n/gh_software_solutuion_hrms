@@ -74,6 +74,7 @@ $route['users/update/(:num)']= 'Users/update/$1';
 $route['users/delete/(:num)']= 'Users/delete/$1';
 $route['users/toggle/(:num)']= 'Users/toggle_status/$1';
 $route['setup']                        = 'Setup/index';
+$route['profile/update']               = 'Profile/update';
 $route['payroll']                      = 'Payroll/index';
 $route['payroll/save_settings']        = 'Payroll/save_settings';
 $route['payroll/set_borrow_deduction'] = 'Payroll/set_borrow_deduction';
@@ -81,6 +82,8 @@ $route['payroll/export/(:any)/(:any)']      = 'Payroll/export/$1/$2';
 $route['payroll/export/(:any)']             = 'Payroll/export/$1';
 $route['payroll/print_view/(:any)/(:any)']  = 'Payroll/print_view/$1/$2';
 $route['payroll/print_view/(:any)']         = 'Payroll/print_view/$1';
+$route['payroll/sign_sheet/(:any)/(:any)']  = 'Payroll/sign_sheet/$1/$2';
+$route['payroll/sign_sheet/(:any)']         = 'Payroll/sign_sheet/$1';
 $route['payroll/line_items']                = 'Payroll/get_line_items';
 $route['payroll/add_line_item']             = 'Payroll/add_line_item';
 $route['payroll/delete_line_item/(:num)']   = 'Payroll/delete_line_item/$1';
@@ -119,6 +122,8 @@ $route['scanner/save_settings']              = 'Scanner/save_settings';
 
 // ── System Config Routes ─────────────────────────────────────────
 $route['system_config']                              = 'SystemConfig/index';
+$route['system_config/system_settings']              = 'SystemConfig/system_settings';
+$route['system_config/save_system_settings']         = 'SystemConfig/save_system_settings';
 $route['system_config/attendance_settings']          = 'SystemConfig/attendance_settings';
 $route['system_config/save_attendance_settings']     = 'SystemConfig/save_attendance_settings';
 $route['system_config/job_roles_datatable']          = 'SystemConfig/job_roles_datatable';

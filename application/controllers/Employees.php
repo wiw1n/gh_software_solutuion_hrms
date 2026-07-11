@@ -23,11 +23,21 @@ class Employees extends MY_Controller {
     // ----------------------------------------------------------------
 
     public function index() {
+        // Project filter options — heads only see the projects they manage
+        $scope    = $this->get_scoped_project_ids();
+        $projects = $this->Project_model->get_all(true);
+        if (is_array($scope)) {
+            $projects = array_values(array_filter($projects, function ($p) use ($scope) {
+                return in_array($p['id'], $scope);
+            }));
+        }
+
         $data = [
             'title'     => 'Employees',
             'page_js'   => 'employees.js',
             'roles'     => $this->User_model->get_all_roles(),
             'job_roles' => $this->Job_role_model->get_all(true),
+            'projects'  => $projects,
             'can_admin' => $this->is_admin_or_above(),
         ];
 
@@ -52,10 +62,12 @@ class Employees extends MY_Controller {
         $order_col = intval($order['column'] ?? 0);
         $order_dir = $order['dir'] ?? 'asc';
 
+        $project_id = intval($this->input->post('project_id')) ?: null;
+
         $scope    = $this->get_scoped_project_ids();
         $total    = $this->Employee_model->get_datatable_total($scope);
-        $filtered = $this->Employee_model->get_datatable_filtered($search, $scope);
-        $rows     = $this->Employee_model->get_datatable_data($length, $start, $search, $order_col, $order_dir, $scope);
+        $filtered = $this->Employee_model->get_datatable_filtered($search, $scope, $project_id);
+        $rows     = $this->Employee_model->get_datatable_data($length, $start, $search, $order_col, $order_dir, $scope, $project_id);
 
         $data    = [];
         $row_num = $start + 1;
@@ -84,6 +96,11 @@ class Employees extends MY_Controller {
                        . '<div class="text-muted small">' . htmlspecialchars($emp['email']) . '</div>'
                        . '</div></div>';
 
+            $project_cell = !empty($emp['project_name'])
+                ? '<span class="badge bg-info-subtle text-info border border-info-subtle">'
+                  . htmlspecialchars($emp['project_name']) . '</span>'
+                : '<span class="text-muted small">—</span>';
+
             $job_role_cell = !empty($emp['job_role_name'])
                 ? '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">'
                   . htmlspecialchars($emp['job_role_name']) . '</span>'
@@ -106,6 +123,7 @@ class Employees extends MY_Controller {
                 $emp_id_cell,
                 $name_cell,
                 '<span class="text-muted">@</span>' . htmlspecialchars($emp['username']),
+                $project_cell,
                 $job_role_cell,
                 $status_badge,
                 $daily_rate,

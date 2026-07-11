@@ -26,6 +26,7 @@ const STATUS_CFG = {
     half_day  : { cls: 'table-warning',              label: '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Half Day</span>' },
     holiday   : { cls: 'table-info',                 label: '<span class="badge bg-info-subtle text-info border border-info-subtle">Holiday</span>' },
     leave     : { cls: 'table-secondary',            label: '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Leave</span>' },
+    off       : { cls: 'table-light',                label: '<span class="badge bg-dark-subtle text-dark border border-dark-subtle">Off</span>' },
     no_record : { cls: 'text-muted',                 label: '<span class="badge bg-light text-muted border">No Record</span>' },
     future    : { cls: 'text-muted',                 label: '<span class="text-muted small">—</span>' },
 };
@@ -170,11 +171,16 @@ function renderTimesheet(rows, confirmedWeeks, salaryRequests) {
         // Week summary
         const daysPresent = weekRows.filter(function (r) { return r.status === 'present'; }).length;
         const totalHours  = weekRows.reduce(function (s, r) { return s + (parseFloat(r.total_hours) || 0); }, 0);
-        const totalOT     = weekRows.reduce(function (s, r) { return s + (parseFloat(r.overtime)    || 0); }, 0);
+        const totalOT     = weekRows.reduce(function (s, r) { return s + (r.ot_status === 'approved' ? (parseFloat(r.overtime) || 0) : 0); }, 0);
+        const pendingOT   = weekRows.reduce(function (s, r) { return s + (r.ot_status === 'pending'  ? (parseFloat(r.overtime) || 0) : 0); }, 0);
         const totalTard   = weekRows.reduce(function (s, r) { return s + (parseFloat(r.tardiness)   || 0); }, 0);
 
-        // Confirm / Unconfirm button (admin only)
-        const periodWord = isSemiMonthly() ? 'Period' : 'Week';
+        // Confirm / Unconfirm button (admin only). A period with days that
+        // have no record at all (incl. future days) cannot be confirmed —
+        // absences must be marked Absent/Leave/Holiday first. The server
+        // re-checks this across month boundaries.
+        const periodWord  = isSemiMonthly() ? 'Period' : 'Week';
+        const missingDays = weekRows.filter(function (r) { return !r.id; }).length;
         let confirmHtml = '';
         if (CAN_EDIT) {
             if (confirmed) {
@@ -183,6 +189,12 @@ function renderTimesheet(rows, confirmedWeeks, salaryRequests) {
                             + '<button class="btn btn-xs btn-outline-light btn-unconfirm-week"'
                             + ' data-user="' + VIEW_USER_ID + '" data-week="' + ws + '"'
                             + ' title="Remove confirmation"><i class="fas fa-unlock-alt"></i></button>';
+            } else if (missingDays > 0) {
+                confirmHtml = '<span class="badge bg-warning text-dark px-2 py-1"'
+                            + ' title="Every day needs a record before this ' + periodWord.toLowerCase()
+                            + ' can be confirmed — mark missing days as Absent, Leave, or Holiday.">'
+                            + '<i class="fas fa-exclamation-triangle me-1"></i>'
+                            + missingDays + ' day' + (missingDays > 1 ? 's' : '') + ' with no record</span>';
             } else {
                 confirmHtml = '<button class="btn btn-sm btn-outline-light btn-confirm-week"'
                             + ' data-user="' + VIEW_USER_ID + '" data-week="' + ws + '">'
@@ -247,6 +259,7 @@ function renderTimesheet(rows, confirmedWeeks, salaryRequests) {
               + '<span><i class="fas fa-clock me-1"></i>' + totalHours.toFixed(2) + ' hrs</span>'
               + (totalTard > 0 ? '<span class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>' + totalTard.toFixed(0) + ' min late</span>' : '')
               + (totalOT   > 0 ? '<span><i class="fas fa-star me-1"></i>' + totalOT.toFixed(2) + ' OT</span>' : '')
+              + (pendingOT > 0 ? '<span class="text-warning"><i class="fas fa-hourglass-half me-1"></i>' + pendingOT.toFixed(2) + ' OT pending</span>' : '')
               + '</div>'
 
               + '<div class="d-flex align-items-center gap-1">'
@@ -277,9 +290,7 @@ function renderTimesheet(rows, confirmedWeeks, salaryRequests) {
             const tardCell = r.tardiness > 0
                 ? '<span class="text-danger fw-semibold">' + parseFloat(r.tardiness).toFixed(0) + ' min</span>'
                 : '<span class="text-muted">—</span>';
-            const otCell   = r.overtime > 0
-                ? '<span class="text-info fw-semibold">' + parseFloat(r.overtime).toFixed(2) + '</span>'
-                : '<span class="text-muted">—</span>';
+            const otCell   = buildOtCell(r);
             const hrsCell  = r.total_hours
                 ? '<span class="fw-semibold">' + parseFloat(r.total_hours).toFixed(2) + '</span>'
                 : '<span class="text-muted">—</span>';
@@ -356,12 +367,90 @@ function renderTimesheet(rows, confirmedWeeks, salaryRequests) {
     $('#timesheet-tbody').html(html);
 }
 
+// ── OT Approval (head / admin) ───────────────────────────────────
+// OT records carry ot_status: 'pending' | 'approved' | 'declined'.
+// Viewers with CAN_EDIT get approve/decline buttons; a decided OT
+// keeps a small button to reverse the decision.
+
+const OT_BADGES = {
+    pending : '<span class="badge bg-warning-subtle text-warning border border-warning-subtle d-block mt-1" style="font-size:.6rem;">Pending</span>',
+    approved: '<span class="badge bg-success-subtle text-success border border-success-subtle d-block mt-1" style="font-size:.6rem;">Approved</span>',
+    declined: '<span class="badge bg-danger-subtle text-danger border border-danger-subtle d-block mt-1" style="font-size:.6rem;">Declined</span>',
+};
+
+function otActionBtn(r, action, cls, icon, title) {
+    return '<button class="btn btn-xs ' + cls + ' btn-ot-action"'
+         + ' data-id="' + r.id + '" data-action="' + action + '"'
+         + ' data-hours="' + parseFloat(r.overtime).toFixed(2) + '" data-date="' + r.date + '"'
+         + ' title="' + title + '"><i class="fas ' + icon + '"></i></button>';
+}
+
+function buildOtCell(r) {
+    const hrs = parseFloat(r.overtime) || 0;
+    if (hrs <= 0) return '<span class="text-muted">—</span>';
+
+    let cell = '<span class="text-info fw-semibold">' + hrs.toFixed(2) + '</span>'
+             + (OT_BADGES[r.ot_status] || '');
+
+    if (CAN_EDIT && r.id && r.ot_status) {
+        if (r.ot_status === 'pending') {
+            cell += '<div class="mt-1 d-flex gap-1 justify-content-center">'
+                  + otActionBtn(r, 'approve', 'btn-success', 'fa-check', 'Approve OT')
+                  + otActionBtn(r, 'decline', 'btn-outline-danger', 'fa-times', 'Decline OT')
+                  + '</div>';
+        } else if (r.ot_status === 'approved') {
+            cell += '<div class="mt-1">' + otActionBtn(r, 'decline', 'btn-outline-danger', 'fa-times', 'Decline this OT instead') + '</div>';
+        } else {
+            cell += '<div class="mt-1">' + otActionBtn(r, 'approve', 'btn-outline-success', 'fa-check', 'Approve this OT instead') + '</div>';
+        }
+    }
+    return cell;
+}
+
+$(document).on('click', '.btn-ot-action', function () {
+    const $btn   = $(this);
+    const action = $btn.data('action');
+    const hours  = $btn.data('hours');
+    const date   = $btn.data('date');
+    const verb   = action === 'approve' ? 'Approve' : 'Decline';
+
+    Swal.fire({
+        title             : verb + ' Overtime?',
+        html              : verb + ' <strong>' + hours + ' hr(s)</strong> of overtime on <strong>' + fmtShort(date) + '</strong>?'
+                          + (action === 'approve'
+                                ? '<br><small class="text-muted">Approved OT is paid at Daily Rate ÷ 8 × OT hours.</small>'
+                                : '<br><small class="text-muted">Declined OT is not paid in payroll.</small>'),
+        icon              : 'question',
+        showCancelButton  : true,
+        confirmButtonColor: action === 'approve' ? '#198754' : '#dc3545',
+        cancelButtonColor : '#6c757d',
+        confirmButtonText : '<i class="fas fa-' + (action === 'approve' ? 'check' : 'times') + ' me-1"></i>Yes, ' + verb,
+    }).then(function (result) {
+        if (!result.isConfirmed) return;
+        $.post(APP_URL + 'attendance/ot_action', { record_id: $btn.data('id'), action: action })
+            .done(function (res) {
+                if (res.success) {
+                    loadTimesheet(currentYear, currentMonth);
+                    Swal.fire({ icon: 'success', title: 'Done!', text: res.message, confirmButtonColor: '#4361ee', timer: 1800, timerProgressBar: true });
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: res.message, confirmButtonColor: '#4361ee' });
+                }
+            }).fail(function (xhr) {
+                const r = xhr.responseJSON;
+                Swal.fire({ icon: 'error', title: 'Error', text: r ? r.message : 'Request failed.', confirmButtonColor: '#4361ee' });
+            });
+    });
+});
+
 function renderSummary(s) {
     if (!s) return;
     $('#sum-present').text(s.days_present || 0);
     $('#sum-hours').text(s.total_hours ? parseFloat(s.total_hours).toFixed(2) : '0.00');
     $('#sum-tardiness').text(s.total_tardiness ? parseFloat(s.total_tardiness).toFixed(0) : '0');
     $('#sum-ot').text(s.total_overtime ? parseFloat(s.total_overtime).toFixed(2) : '0.00');
+
+    const pend = parseFloat(s.total_ot_pending) || 0;
+    $('#sum-ot-pending').text(pend > 0 ? '+ ' + pend.toFixed(2) + ' pending approval' : '');
 }
 
 // ── Week Confirm / Unconfirm (Admin) ─────────────────────────────

@@ -11,8 +11,14 @@
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
+<!-- Global: base URL fallback for pages that don't set it inline -->
+<script>window.APP_URL = window.APP_URL || '<?= base_url() ?>';</script>
+
 <!-- Global: notifications -->
 <script src="<?= base_url('assets/js/notifications.js') ?>"></script>
+
+<!-- Global: edit profile modal -->
+<script src="<?= base_url('assets/js/profile.js') ?>"></script>
 
 <!-- Page-specific JS file -->
 <?php if (!empty($page_js)): ?>

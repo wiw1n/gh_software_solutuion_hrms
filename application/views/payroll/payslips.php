@@ -149,12 +149,12 @@ $pages = array_chunk($rows, 12);
                 <td class="lbl">Days Worked</td>
                 <td class="r"><?= (int)$r['days_present'] ?> day<?= $r['days_present'] != 1 ? 's' : '' ?></td>
             </tr>
+            <?php if (($r['ot_hours'] ?? 0) > 0): ?>
             <tr>
-                <td class="lbl">Daily Rate</td>
-                <td class="r">
-                    <?= $no_rate ? '<span class="warn">Not Set</span>' : '&#8369;' . number_format($r['daily_rate'], 2) ?>
-                </td>
+                <td class="lbl">Overtime (<?= number_format($r['ot_hours'], 2) ?> hrs)</td>
+                <td class="r add-val">+&#8369;<?= number_format($r['ot_pay'], 2) ?></td>
             </tr>
+            <?php endif; ?>
             <tr>
                 <td class="lbl"><strong>Gross Pay</strong></td>
                 <td class="r"><strong><?= $no_rate ? '—' : '&#8369;' . number_format($r['gross_pay'], 2) ?></strong></td>

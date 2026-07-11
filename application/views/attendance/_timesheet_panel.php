@@ -59,7 +59,7 @@ $punch_btns = [
                             <?php endif; ?>
                             <?php if (($today_rec['overtime'] ?? 0) > 0): ?>
                             <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1">
-                                <i class="fas fa-star me-1"></i><?= number_format($today_rec['overtime'], 2) ?> OT
+                                <i class="fas fa-star me-1"></i><?= number_format($today_rec['overtime'], 2) ?> OT<?= !empty($today_rec['ot_status']) ? ' · ' . ucfirst($today_rec['ot_status']) : '' ?>
                             </span>
                             <?php endif; ?>
                         </div>
@@ -87,7 +87,7 @@ $punch_btns = [
                             &nbsp;|&nbsp;
                             <strong><?= number_format($today_rec['total_hours'], 2) ?> hrs</strong>
                             <?php if ($today_rec['overtime'] > 0): ?>
-                            <span class="text-info ms-2"><i class="fas fa-star me-1"></i><?= number_format($today_rec['overtime'], 2) ?> OT</span>
+                            <span class="text-info ms-2"><i class="fas fa-star me-1"></i><?= number_format($today_rec['overtime'], 2) ?> OT<?= !empty($today_rec['ot_status']) ? ' (' . ucfirst($today_rec['ot_status']) . ')' : '' ?></span>
                             <?php endif; ?>
                         </p>
                     <?php endif; ?>
@@ -147,7 +147,8 @@ $punch_btns = [
             <div class="col-6 col-md-3">
                 <div class="border rounded p-3 text-center">
                     <div class="fs-4 fw-bold text-info" id="sum-ot">—</div>
-                    <div class="text-muted small">Overtime (hrs)</div>
+                    <div class="text-muted small">Approved OT (hrs)</div>
+                    <div class="text-warning" style="font-size:.7rem;" id="sum-ot-pending"></div>
                 </div>
             </div>
         </div>
@@ -317,6 +318,7 @@ $punch_btns = [
                                 <option value="half_day">Half Day</option>
                                 <option value="holiday">Holiday</option>
                                 <option value="leave">Leave</option>
+                                <option value="off">Off (Rest Day)</option>
                             </select>
                         </div>
                         <div class="col-12">

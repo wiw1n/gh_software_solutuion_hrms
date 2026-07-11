@@ -1,9 +1,14 @@
+<?php
+$CI =& get_instance();
+$CI->load->model('Setting_model');
+$site = $CI->Setting_model->get_all();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | GH Software Solution</title>
+    <title>Login | <?= htmlspecialchars($site['system_name']) ?></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- App Stylesheet -->
@@ -15,10 +20,14 @@
 
         <!-- Header -->
         <div class="login-header">
-            <div class="logo-box">
+            <div class="logo-box" <?= !empty($site['company_logo']) ? 'style="background:#fff;overflow:hidden;"' : '' ?>>
+                <?php if (!empty($site['company_logo'])): ?>
+                <img src="<?= base_url($site['company_logo']) ?>" alt="Logo" style="width:100%;height:100%;object-fit:contain;">
+                <?php else: ?>
                 <i class="fas fa-cubes text-white" style="font-size:1.3rem;"></i>
+                <?php endif; ?>
             </div>
-            <h5 class="fw-bold text-dark mb-1">GH Software Solution</h5>
+            <h5 class="fw-bold text-dark mb-1"><?= htmlspecialchars($site['system_name']) ?></h5>
             <p class="text-muted mb-0" style="font-size:.83rem;">Admin Management System</p>
         </div>
 
@@ -77,7 +86,7 @@
         </div>
     </div>
 
-    <p class="copyright">&copy; <?= date('Y') ?> GH Software Solution. All rights reserved.</p>
+    <p class="copyright">&copy; <?= date('Y') ?> <?= htmlspecialchars($site['system_name']) ?>. All rights reserved.</p>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

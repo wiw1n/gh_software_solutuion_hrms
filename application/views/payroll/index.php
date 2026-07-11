@@ -16,6 +16,15 @@ $total_line_deduct= array_sum(array_column($rows, 'line_deductions'));
 $total_net        = array_sum(array_column($rows, 'net_pay'));
 $missing_rate     = count(array_filter($rows, fn($r) => $r['daily_rate'] === null));
 
+// Project filter (0 = all projects); appended to export/print URLs
+$projects       = $projects ?? [];
+$project_filter = (int)($project_filter ?? 0);
+$project_qs     = $project_filter > 0 ? '?project=' . $project_filter : '';
+$project_fname  = '';
+foreach ($projects as $p) {
+    if ((int)$p['id'] === $project_filter) { $project_fname = $p['name']; break; }
+}
+
 // Borrow rows that are approved but admin hasn't set deduction yet
 $pending_borrow_decision = count(array_filter($rows, fn($r) =>
     $r['borrow_status'] === 'approved' && $r['borrow_period_deduct'] === null
@@ -37,6 +46,11 @@ $pending_borrow_decision = count(array_filter($rows, fn($r) =>
         <span class="badge bg-primary-subtle text-primary border border-primary-subtle mt-1 ms-1">
             <?= $is_semi ? '15/30 Payroll' : 'Weekly Payroll' ?>
         </span>
+        <?php if ($project_fname !== ''): ?>
+        <span class="badge bg-info-subtle text-info border border-info-subtle mt-1 ms-1">
+            <i class="fas fa-hard-hat me-1"></i><?= htmlspecialchars($project_fname) ?>
+        </span>
+        <?php endif; ?>
         <?php endif; ?>
         <?php if ($missing_rate > 0): ?>
         <span class="badge bg-warning-subtle text-warning border border-warning-subtle mt-1 ms-1">
@@ -53,16 +67,20 @@ $pending_borrow_decision = count(array_filter($rows, fn($r) =>
     </div>
     <?php if ($week_start && !empty($rows)): ?>
     <div class="d-flex gap-2 flex-wrap">
-        <a href="<?= base_url('payroll/export/' . $week_start . '/' . $period_type) ?>" class="btn btn-success">
+        <a href="<?= base_url('payroll/export/' . $week_start . '/' . $period_type . $project_qs) ?>" class="btn btn-success">
             <i class="fas fa-file-excel me-2"></i>Export Excel
         </a>
-        <button onclick="window.open('<?= base_url('payroll/print_view/' . $week_start . '/' . $period_type) ?>', '_blank')"
+        <button onclick="window.open('<?= base_url('payroll/print_view/' . $week_start . '/' . $period_type . $project_qs) ?>', '_blank')"
                 class="btn btn-outline-secondary">
             <i class="fas fa-print me-2"></i>Print
         </button>
-        <button onclick="window.open('<?= base_url('payroll/payslips/' . $week_start . '/' . $period_type) ?>', '_blank')"
+        <button onclick="window.open('<?= base_url('payroll/payslips/' . $week_start . '/' . $period_type . $project_qs) ?>', '_blank')"
                 class="btn btn-outline-primary">
             <i class="fas fa-receipt me-2"></i>Print Payslips
+        </button>
+        <button onclick="window.open('<?= base_url('payroll/sign_sheet/' . $week_start . '/' . $period_type . $project_qs) ?>', '_blank')"
+                class="btn btn-outline-dark">
+            <i class="fas fa-signature me-2"></i>Sign Sheet
         </button>
     </div>
     <?php endif; ?>
@@ -100,6 +118,17 @@ $pending_borrow_decision = count(array_filter($rows, fn($r) =>
                     <?php endforeach; ?>
                 </select>
                 <?php endif; ?>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold small">Project</label>
+                <select class="form-select" name="project" onchange="this.form.submit();">
+                    <option value="0">All Projects</option>
+                    <?php foreach ($projects as $p): ?>
+                    <option value="<?= (int)$p['id'] ?>" <?= (int)$p['id'] === $project_filter ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($p['name']) ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <?php if (!empty($weeks)): ?>
             <div class="col-auto">
@@ -219,6 +248,11 @@ $pending_borrow_decision = count(array_filter($rows, fn($r) =>
                             <?php if ($r['total_hours'] > 0): ?>
                             <div class="text-muted" style="font-size:.7rem;"><?= number_format($r['total_hours'], 2) ?> hrs</div>
                             <?php endif; ?>
+                            <?php if ($r['ot_hours'] > 0): ?>
+                            <div class="text-info" style="font-size:.7rem;">
+                                <i class="fas fa-star me-1"></i><?= number_format($r['ot_hours'], 2) ?> OT hrs
+                            </div>
+                            <?php endif; ?>
                         </td>
 
                         <!-- Daily Rate -->
@@ -253,6 +287,11 @@ $pending_borrow_decision = count(array_filter($rows, fn($r) =>
                         <!-- Gross Pay -->
                         <td class="text-end fw-semibold">
                             <?= $no_rate ? '<span class="text-muted">—</span>' : '&#8369;' . number_format($r['gross_pay'], 2) ?>
+                            <?php if (!$no_rate && $r['ot_pay'] > 0): ?>
+                            <div class="text-info fw-normal" style="font-size:.68rem;">
+                                incl. &#8369;<?= number_format($r['ot_pay'], 2) ?> OT
+                            </div>
+                            <?php endif; ?>
                         </td>
 
                         <!-- SSS -->
@@ -629,7 +668,7 @@ $pending_borrow_decision = count(array_filter($rows, fn($r) =>
                         <input type="number" class="form-control" id="ps-daily-rate"
                                min="0" step="0.01" placeholder="e.g. 500.00">
                     </div>
-                    <div class="form-text">Gross Pay = Days Present × Daily Rate</div>
+                    <div class="form-text">Gross Pay = Days Present × Daily Rate + OT Pay (Daily Rate ÷ 8 × approved OT hrs)</div>
                 </div>
 
                 <hr class="my-3">

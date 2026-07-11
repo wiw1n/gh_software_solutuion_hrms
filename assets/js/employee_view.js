@@ -19,6 +19,7 @@ const ATT_STATUS_COLOR = {
     half_day : 'warning',
     holiday  : 'info',
     leave    : 'secondary',
+    off      : 'dark',
 };
 
 function fmt(val) {
@@ -94,7 +95,9 @@ function loadAttendance() {
                       + '<td>' + fmtTime(r.time_in) + '</td>'
                       + '<td>' + fmtTime(r.time_out) + '</td>'
                       + '<td>' + (r.total_hours ? r.total_hours + ' hrs' : '<span class="text-muted">—</span>') + '</td>'
-                      + '<td>' + (r.overtime ? r.overtime + ' hrs' : '<span class="text-muted">—</span>') + '</td>'
+                      + '<td>' + (parseFloat(r.overtime) > 0
+                            ? r.overtime + ' hrs' + (r.ot_status ? ' <span class="text-muted small">(' + r.ot_status + ')</span>' : '')
+                            : '<span class="text-muted">—</span>') + '</td>'
                       + '<td>' + (r.tardiness ? r.tardiness + ' min' : '<span class="text-muted">—</span>') + '</td>'
                       + '<td><span class="badge bg-' + sc + '-subtle text-' + sc + ' border border-' + sc + '-subtle">' + label + '</span></td>'
                       + '<td class="text-muted small">' + (r.notes || '—') + '</td>'

@@ -64,6 +64,9 @@ $(document).ready(function () {
         ajax       : {
             url  : APP_URL + 'employees/datatable',
             type : 'POST',
+            data : function (d) {
+                d.project_id = $('#filter-project').val();
+            },
         },
         columns: [
             { data: 0, orderable: true,  searchable: false, width: '52px' },
@@ -74,7 +77,8 @@ $(document).ready(function () {
             { data: 5, orderable: true,  searchable: false },
             { data: 6, orderable: true,  searchable: false },
             { data: 7, orderable: true,  searchable: false },
-            { data: 8, orderable: false, searchable: false, className: 'text-center' },
+            { data: 8, orderable: true,  searchable: false },
+            { data: 9, orderable: false, searchable: false, className: 'text-center' },
         ],
         order      : [[0, 'asc']],
         pageLength : 10,
@@ -94,6 +98,12 @@ $(document).ready(function () {
                 el.textContent = el.dataset.initials || '';
             });
         },
+    });
+
+    // ── Project Filter ───────────────────────────────────────────
+
+    $('#filter-project').on('change', function () {
+        empTable.ajax.reload();
     });
 
     // ── Add Employee Button ──────────────────────────────────────

@@ -25,6 +25,19 @@
 <!-- DataTable Card -->
 <div class="card dt-card">
     <div class="card-body p-4">
+        <div class="d-flex justify-content-end mb-3">
+            <div class="d-flex align-items-center gap-2">
+                <label for="filter-project" class="form-label fw-semibold mb-0 text-nowrap" style="font-size:.87rem;">
+                    <i class="fas fa-filter me-1 text-muted"></i>Project
+                </label>
+                <select class="form-select form-select-sm" id="filter-project" style="min-width:220px;">
+                    <option value="">All Projects</option>
+                    <?php foreach ($projects as $p): ?>
+                    <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
         <div class="table-responsive">
             <table id="employees-table" class="table table-hover align-middle" style="width:100%">
                 <thead class="table-light">
@@ -33,6 +46,7 @@
                         <th>Employee ID</th>
                         <th>Name / Email</th>
                         <th>Username</th>
+                        <th>Project</th>
                         <th>Job Role</th>
                         <th>Status</th>
                         <th>Daily Rate</th>

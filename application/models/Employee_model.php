@@ -42,31 +42,38 @@ class Employee_model extends CI_Model {
         }
     }
 
-    public function get_datatable_data($limit, $start, $search, $order_col, $order_dir, $project_ids = null) {
+    public function get_datatable_data($limit, $start, $search, $order_col, $order_dir, $project_ids = null, $filter_project_id = null) {
         $columns = [
             0 => 'u.id',
             1 => 'u.employee_id',
             2 => 'u.first_name',
             3 => 'u.username',
-            4 => 'jr.name',
-            5 => 'u.status',
-            6 => 'epi.daily_rate',
-            7 => 'u.created_at',
+            4 => 'p.name',
+            5 => 'jr.name',
+            6 => 'u.status',
+            7 => 'epi.daily_rate',
+            8 => 'u.created_at',
         ];
 
         $this->db
             ->select('u.id, u.employee_id, u.first_name, u.last_name, u.username, u.email, u.status, u.created_at,
                       epi.daily_rate,
                       jr.name AS job_role_name,
+                      p.name AS project_name,
                       r.name AS role_name, r.slug AS role_slug', FALSE)
             ->from('users u')
             ->join('roles r', 'r.id = u.role_id')
             ->join('employee_payroll_info epi', 'epi.user_id = u.id', 'left')
             ->join('job_roles jr', 'jr.id = u.job_role_id', 'left')
+            ->join('projects p', 'p.id = u.project_id', 'left')
             ->where('r.slug !=', 'super_admin')
             ->group_by('u.id');
 
         $this->apply_project_scope($project_ids);
+
+        if (!empty($filter_project_id)) {
+            $this->db->where('u.project_id', $filter_project_id);
+        }
 
         if (!empty($search)) {
             $this->db->group_start()
@@ -100,13 +107,17 @@ class Employee_model extends CI_Model {
         return $this->db->count_all_results();
     }
 
-    public function get_datatable_filtered($search, $project_ids = null) {
+    public function get_datatable_filtered($search, $project_ids = null, $filter_project_id = null) {
         $this->db
             ->from('users u')
             ->join('roles r', 'r.id = u.role_id')
             ->where('r.slug !=', 'super_admin');
 
         $this->apply_project_scope($project_ids);
+
+        if (!empty($filter_project_id)) {
+            $this->db->where('u.project_id', $filter_project_id);
+        }
 
         if (!empty($search)) {
             $this->db->group_start()

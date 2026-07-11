@@ -37,6 +37,8 @@ class Payroll_model extends CI_Model {
                 u.last_name,
                 u.email,
                 r.name        AS role_name,
+                u.project_id,
+                p.name        AS project_name,
                 wc.week_start,
                 wc.confirmed_at,
                 CONCAT(adm.first_name, ' ', adm.last_name) AS confirmed_by_name,
@@ -44,7 +46,7 @@ class Payroll_model extends CI_Model {
                 COALESCE(SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END), 0) AS days_present,
                 COALESCE(SUM(a.total_hours),  0) AS total_hours,
                 COALESCE(SUM(a.tardiness),    0) AS total_tardiness,
-                COALESCE(SUM(a.overtime),     0) AS total_overtime,
+                COALESCE(SUM(CASE WHEN a.ot_status = 'approved' THEN a.overtime ELSE 0 END), 0) AS total_overtime,
 
                 epi.daily_rate,
                 epi.sss_enabled,
@@ -65,6 +67,7 @@ class Payroll_model extends CI_Model {
             JOIN  users u   ON u.id   = wc.user_id
             JOIN  roles r   ON r.id   = u.role_id
             JOIN  users adm ON adm.id = wc.confirmed_by
+            LEFT JOIN projects p ON p.id = u.project_id
             LEFT JOIN attendance a
                 ON  a.user_id = wc.user_id
                 AND a.date   >= wc.week_start
@@ -85,7 +88,8 @@ class Payroll_model extends CI_Model {
             WHERE wc.week_start = ?
               AND u.timesheet_type = ?
             GROUP BY
-                wc.user_id, u.employee_id, wc.week_start, wc.confirmed_at,
+                wc.user_id, u.employee_id, u.project_id, p.name,
+                wc.week_start, wc.confirmed_at,
                 adm.first_name, adm.last_name,
                 epi.daily_rate, epi.sss_enabled, epi.sss_amount,
                 epi.philhealth_enabled, epi.philhealth_amount,
@@ -97,6 +101,29 @@ class Payroll_model extends CI_Model {
         ";
 
         return $this->db->query($sql, [$period_end_excl, $week_start, $timesheet_type])->result_array();
+    }
+
+    // ================================================================
+    // Daily attendance for a period, keyed [user_id][date]
+    // (used by the signature sheet's per-day columns)
+    // ================================================================
+
+    public function get_daily_attendance($week_start, $period_end_excl, $user_ids) {
+        if (empty($user_ids)) return [];
+
+        $rows = $this->db
+            ->select('user_id, date, status, total_hours, overtime')
+            ->where_in('user_id', array_map('intval', $user_ids))
+            ->where('date >=', $week_start)
+            ->where('date <',  $period_end_excl)
+            ->get('attendance')
+            ->result_array();
+
+        $keyed = [];
+        foreach ($rows as $row) {
+            $keyed[$row['user_id']][$row['date']] = $row;
+        }
+        return $keyed;
     }
 
     // ================================================================

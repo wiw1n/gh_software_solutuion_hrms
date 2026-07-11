@@ -11,6 +11,94 @@
 </div>
 
 <?php if (!empty($is_super)): ?>
+<!-- System Settings Card (super admin only) -->
+<div class="card mb-4" id="sys-settings-card">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3 px-4">
+        <div>
+            <h6 class="mb-0 fw-bold"><i class="fas fa-sliders-h me-2 text-primary"></i>System Settings</h6>
+            <small class="text-muted">System name, theme, and the company info printed on form headers</small>
+        </div>
+        <button class="btn btn-primary btn-sm px-3" id="btn-save-sys">
+            <span class="spinner-border spinner-border-sm me-1 d-none" id="sys-spinner"></span>
+            <i class="fas fa-save me-1" id="sys-save-icon"></i> Save Settings
+        </button>
+    </div>
+    <div class="card-body p-4">
+
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">System Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="sys-name" maxlength="255" placeholder="e.g. GH Software Solution">
+                    <div class="form-text">Shown in the sidebar brand and browser page titles.</div>
+                </div>
+
+                <label class="form-label fw-semibold mb-2">Theme</label>
+                <div id="sys-theme-list">
+                    <?php foreach (($themes ?? []) as $slug => $t): ?>
+                    <label class="theme-swatch" data-theme="<?= $slug ?>">
+                        <input type="radio" name="sys-theme" value="<?= $slug ?>" class="d-none">
+                        <span class="swatch-dot" style="background:<?= $t['accent'] ?>;"></span>
+                        <span class="small fw-semibold"><?= $t['label'] ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+                <div class="form-text">Changes the accent color and sidebar shade across the whole system.</div>
+            </div>
+
+            <div class="col-lg-5">
+                <label class="form-label fw-semibold mb-2">Company Logo</label>
+                <div class="d-flex align-items-start gap-3">
+                    <div class="border rounded d-flex align-items-center justify-content-center bg-light flex-shrink-0"
+                         style="width:96px;height:96px;overflow:hidden;">
+                        <img id="sys-logo-preview" src="" alt="Logo" class="d-none"
+                             style="max-width:100%;max-height:100%;object-fit:contain;">
+                        <i class="fas fa-image fa-2x text-muted opacity-50" id="sys-logo-placeholder"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <input type="file" class="form-control form-control-sm" id="sys-logo"
+                               accept=".png,.jpg,.jpeg,.gif,.webp">
+                        <div class="form-text">PNG, JPG, GIF or WEBP — max 2 MB. Printed on form headers (payroll sign sheet, reports) and shown in the sidebar.</div>
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" id="sys-logo-remove">
+                            <label class="form-check-label small text-muted" for="sys-logo-remove">Remove current logo</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr class="my-4 opacity-25">
+
+        <label class="form-label fw-semibold mb-1">Company Information</label>
+        <div class="text-muted small mb-3">Printed as the letterhead on payroll sign sheets and other forms.</div>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1">Company Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="sys-co-name" maxlength="255" placeholder="e.g. KAMARI CONSTRUCTION AND SUPPLY">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1">Tagline / Sub-heading</label>
+                <input type="text" class="form-control" id="sys-co-tagline" maxlength="255" placeholder="e.g. GENERAL ENGINEERING GENERAL BUILDING">
+            </div>
+            <div class="col-md-12">
+                <label class="form-label small text-muted mb-1">Address</label>
+                <input type="text" class="form-control" id="sys-co-address" maxlength="255" placeholder="e.g. Msgr. Lino Gonzaga St. Brgy. II Poblacion, Jaro, Leyte">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1">E-Mail Address</label>
+                <input type="email" class="form-control" id="sys-co-email" maxlength="255" placeholder="e.g. kamari.construction@gmail.com">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1">Cell / Phone No.</label>
+                <input type="text" class="form-control" id="sys-co-phone" maxlength="255" placeholder="e.g. +63910-976-0000">
+            </div>
+        </div>
+
+    </div>
+</div>
+
 <!-- Attendance Clock Settings Card (super admin only) -->
 <div class="card mb-4" id="att-settings-card">
     <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3 px-4">

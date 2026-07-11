@@ -397,6 +397,7 @@ class Attendance extends MY_Controller {
                     'total_hours'        => $rec['total_hours'],
                     'tardiness'          => $rec['tardiness'],
                     'overtime'           => $rec['overtime'],
+                    'ot_status'          => $rec['ot_status'],
                     'notes'              => $rec['notes'],
                     'is_today'           => $is_today,
                     'is_future'          => false,
@@ -422,6 +423,7 @@ class Attendance extends MY_Controller {
                     'total_hours'        => null,
                     'tardiness'          => null,
                     'overtime'           => null,
+                    'ot_status'          => null,
                     'notes'              => null,
                     'is_today'           => $is_today,
                     'is_future'          => $is_future,
@@ -466,10 +468,104 @@ class Attendance extends MY_Controller {
         if ($action === 'unconfirm') {
             $this->Attendance_model->unconfirm_week($user_id, $week_start);
             $this->json(['success' => true, 'message' => 'Week confirmation removed.']);
-        } else {
-            $this->Attendance_model->confirm_week($user_id, $week_start, (int)$this->auth_user['id']);
-            $this->json(['success' => true, 'message' => 'Week confirmed for salary preparation.']);
+            return;
         }
+
+        // A period can only be confirmed once every day in it has a record —
+        // absences must be marked absent/leave/holiday; no "No Record" days.
+        $target      = $this->User_model->get_by_id($user_id);
+        $period_end  = $this->_period_end($week_start, $target['timesheet_type'] ?? 'weekly');
+        $period_word = ($target['timesheet_type'] ?? 'weekly') === 'semi_monthly' ? 'period' : 'week';
+        $missing     = $this->Attendance_model->get_missing_dates($user_id, $week_start, $period_end);
+
+        if (!empty($missing)) {
+            $today  = date('Y-m-d');
+            $future = array_filter($missing, function ($d) use ($today) { return $d > $today; });
+
+            if (!empty($future)) {
+                $this->json([
+                    'success' => false,
+                    'message' => 'This ' . $period_word . ' is not finished yet (ends '
+                               . date('M d, Y', strtotime($period_end)) . '). It can only be confirmed once every day has a record.',
+                ], 422);
+                return;
+            }
+
+            $labels = array_map(function ($d) { return date('M d', strtotime($d)); }, array_slice($missing, 0, 10));
+            $this->json([
+                'success' => false,
+                'message' => count($missing) . ' day(s) in this ' . $period_word . ' have no record: '
+                           . implode(', ', $labels) . (count($missing) > 10 ? '…' : '')
+                           . '. Mark each as Absent, Leave, or Holiday before confirming.',
+            ], 422);
+            return;
+        }
+
+        $this->Attendance_model->confirm_week($user_id, $week_start, (int)$this->auth_user['id']);
+        $this->json(['success' => true, 'message' => ucfirst($period_word) . ' confirmed for salary preparation.']);
+    }
+
+    // Period end (inclusive) for a period start + timesheet type
+    // (weekly: Mon–Sun; semi-monthly: 1st–15th or 16th–month end)
+    private function _period_end($week_start, $type) {
+        if ($type === 'semi_monthly') {
+            if ((int)date('j', strtotime($week_start)) === 1) {
+                return date('Y-m-d', strtotime($week_start . ' +14 days'));
+            }
+            return date('Y-m-t', strtotime($week_start));
+        }
+        return date('Y-m-d', strtotime($week_start . ' +6 days'));
+    }
+
+    // ----------------------------------------------------------------
+    // AJAX: Approve / Decline overtime (head or admin)
+    // ----------------------------------------------------------------
+
+    public function ot_action() {
+        $this->require_role('super_admin', 'admin', 'project_head');
+        if ($this->input->method() !== 'post') show_404();
+
+        $id     = (int)$this->input->post('record_id');
+        $action = $this->input->post('action'); // 'approve' | 'decline'
+
+        if (!$id || !in_array($action, ['approve', 'decline'])) {
+            $this->json(['success' => false, 'message' => 'Invalid parameters.'], 422);
+            return;
+        }
+
+        $rec = $this->Attendance_model->get_record($id);
+        if (!$rec) {
+            $this->json(['success' => false, 'message' => 'Record not found.'], 404);
+            return;
+        }
+        if (!$this->can_manage_attendance((int)$rec['user_id'])) {
+            $this->json(['success' => false, 'message' => 'Access denied.'], 403);
+            return;
+        }
+        if ((float)$rec['overtime'] <= 0 || empty($rec['ot_status'])) {
+            $this->json(['success' => false, 'message' => 'This record has no overtime to review.'], 422);
+            return;
+        }
+
+        $status = $action === 'approve' ? 'approved' : 'declined';
+        $this->Attendance_model->set_ot_status($id, $status, (int)$this->auth_user['id']);
+
+        $this->load->model('Notification_model');
+        $this->Notification_model->create(
+            (int)$rec['user_id'],
+            'ot_' . $status,
+            'Overtime ' . ucfirst($status),
+            number_format((float)$rec['overtime'], 2) . ' hr(s) of overtime on '
+                . date('M d, Y', strtotime($rec['date'])) . ' was ' . $status . ' by '
+                . $this->auth_user['first_name'] . ' ' . $this->auth_user['last_name'] . '.',
+            base_url('attendance')
+        );
+
+        $this->json([
+            'success' => true,
+            'message' => 'Overtime of ' . number_format((float)$rec['overtime'], 2)
+                       . ' hr(s) on ' . date('M d, Y', strtotime($rec['date'])) . ' ' . $status . '.',
+        ]);
     }
 
     // ----------------------------------------------------------------
@@ -560,7 +656,7 @@ class Attendance extends MY_Controller {
         $status  = $this->input->post('status');
         $notes   = trim($this->input->post('notes', TRUE));
 
-        $allowed = ['present', 'absent', 'half_day', 'holiday', 'leave'];
+        $allowed = ['present', 'absent', 'half_day', 'holiday', 'leave', 'off'];
         if (!in_array($status, $allowed)) $status = 'present';
 
         if (!$user_id || !$date) {

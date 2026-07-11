@@ -8,6 +8,12 @@ class Payroll extends MY_Controller {
         $this->require_login();
         $this->require_role('super_admin', 'admin');
         $this->load->model('Payroll_model');
+        // Ensures the projects table / users.project_id column exist
+        // (payroll rows join projects for the project filter)
+        $this->load->model('Project_model');
+        // Ensures the attendance OT approval columns exist
+        // (payroll sums approved overtime via attendance.ot_status)
+        $this->load->model('Attendance_model');
     }
 
     // ----------------------------------------------------------------
@@ -17,6 +23,7 @@ class Payroll extends MY_Controller {
     public function index() {
         $week_start = $this->input->get('week') ?: null;
         $type       = $this->input->get('type');
+        $project_id = (int)($this->input->get('project') ?: 0);
 
         if ($week_start && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $week_start)) {
             $week_start = null;
@@ -43,15 +50,18 @@ class Payroll extends MY_Controller {
         }
 
         $rows = $week_start ? $this->_fetch_payroll_rows($week_start, $type) : [];
+        $rows = $this->_filter_by_project($rows, $project_id);
 
         $data = [
-            'title'       => 'Payroll Report',
-            'page_js'     => 'payroll.js',
-            'weeks'       => $weeks,
-            'week_start'  => $week_start,
-            'period_type' => $type,
-            'week_end'    => $week_start ? $this->_period_end($week_start, $type) : null,
-            'rows'        => $rows,
+            'title'          => 'Payroll Report',
+            'page_js'        => 'payroll.js',
+            'weeks'          => $weeks,
+            'week_start'     => $week_start,
+            'period_type'    => $type,
+            'week_end'       => $week_start ? $this->_period_end($week_start, $type) : null,
+            'rows'           => $rows,
+            'projects'       => $this->Project_model->get_all(),
+            'project_filter' => $project_id,
         ];
 
         $this->load->view('layouts/header', $data);
@@ -216,7 +226,10 @@ class Payroll extends MY_Controller {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $week_start)) show_404();
         if (!in_array($type, ['weekly', 'semi_monthly'])) $type = 'weekly';
 
-        $rows     = $this->_fetch_payroll_rows($week_start, $type);
+        $rows     = $this->_filter_by_project(
+            $this->_fetch_payroll_rows($week_start, $type),
+            (int)($this->input->get('project') ?: 0)
+        );
         $week_end = $this->_period_end($week_start, $type);
         $filename = 'payroll_' . $week_start . ($type === 'semi_monthly' ? '_15-30' : '') . '.csv';
 
@@ -242,6 +255,8 @@ class Payroll extends MY_Controller {
             'Role',
             'Days Present',
             'Total Hours',
+            'Approved OT (hrs)',
+            'OT Pay (PHP)',
             'Daily Rate (PHP)',
             'Gross Pay (PHP)',
             'SSS Deduction (PHP)',
@@ -279,6 +294,8 @@ class Payroll extends MY_Controller {
                 $r['role_name'],
                 $r['days_present'],
                 number_format((float)$r['total_hours'], 2),
+                number_format($r['ot_hours'], 2),
+                number_format($r['ot_pay'],   2),
                 $r['daily_rate'] !== null ? number_format((float)$r['daily_rate'], 2) : 'Not Set',
                 number_format($r['gross_pay'],         2),
                 number_format($r['sss_deduct'],        2),
@@ -305,6 +322,8 @@ class Payroll extends MY_Controller {
             '', 'TOTALS', '',
             array_sum(array_column($rows, 'days_present')),
             number_format(array_sum(array_column($rows, 'total_hours')), 2),
+            number_format(array_sum(array_column($rows, 'ot_hours')),    2),
+            number_format(array_sum(array_column($rows, 'ot_pay')),      2),
             '',
             number_format(array_sum(array_column($rows, 'gross_pay')),         2),
             number_format(array_sum(array_column($rows, 'sss_deduct')),        2),
@@ -333,16 +352,68 @@ class Payroll extends MY_Controller {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $week_start)) show_404();
         if (!in_array($type, ['weekly', 'semi_monthly'])) $type = 'weekly';
 
-        $rows = $this->_fetch_payroll_rows($week_start, $type);
+        $rows = $this->_filter_by_project(
+            $this->_fetch_payroll_rows($week_start, $type),
+            (int)($this->input->get('project') ?: 0)
+        );
+
+        $this->load->model('Setting_model');
 
         $data = [
             'week_start'  => $week_start,
             'week_end'    => $this->_period_end($week_start, $type),
             'period_type' => $type,
             'rows'        => $rows,
+            'company'     => $this->Setting_model->get_all(),
         ];
 
         $this->load->view('payroll/print', $data);
+    }
+
+    // ----------------------------------------------------------------
+    // Print-ready signature sheet (payroll form employees sign)
+    // One table per project, with per-day columns like the paper form
+    // ----------------------------------------------------------------
+
+    public function sign_sheet($week_start = '', $type = 'weekly') {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $week_start)) show_404();
+        if (!in_array($type, ['weekly', 'semi_monthly'])) $type = 'weekly';
+
+        $rows     = $this->_filter_by_project(
+            $this->_fetch_payroll_rows($week_start, $type),
+            (int)($this->input->get('project') ?: 0)
+        );
+        $week_end = $this->_period_end($week_start, $type);
+        $user_ids = array_column($rows, 'user_id');
+
+        $period_end_excl = date('Y-m-d', strtotime($week_end . ' +1 day'));
+        $daily_attendance = $this->Payroll_model->get_daily_attendance($week_start, $period_end_excl, $user_ids);
+
+        // Group payroll rows by project (employees without one go last)
+        $groups = [];
+        foreach ($rows as $r) {
+            $pname = $r['project_name'] ?? null;
+            $key   = ($pname !== null && $pname !== '') ? $pname : 'Unassigned';
+            $groups[$key][] = $r;
+        }
+        uksort($groups, function ($a, $b) {
+            if ($a === 'Unassigned') return 1;
+            if ($b === 'Unassigned') return -1;
+            return strcasecmp($a, $b);
+        });
+
+        $this->load->model('Setting_model');
+
+        $data = [
+            'week_start'       => $week_start,
+            'week_end'         => $week_end,
+            'period_type'      => $type,
+            'groups'           => $groups,
+            'daily_attendance' => $daily_attendance,
+            'company'          => $this->Setting_model->get_all(),
+        ];
+
+        $this->load->view('payroll/sign_sheet', $data);
     }
 
     // ----------------------------------------------------------------
@@ -354,7 +425,10 @@ class Payroll extends MY_Controller {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $week_start)) show_404();
         if (!in_array($type, ['weekly', 'semi_monthly'])) $type = 'weekly';
 
-        $rows = $this->_fetch_payroll_rows($week_start, $type);
+        $rows = $this->_filter_by_project(
+            $this->_fetch_payroll_rows($week_start, $type),
+            (int)($this->input->get('project') ?: 0)
+        );
 
         $user_id = (int)$user_id;
         if ($user_id) {
@@ -374,6 +448,18 @@ class Payroll extends MY_Controller {
         ];
 
         $this->load->view('payroll/payslips', $data);
+    }
+
+    // ----------------------------------------------------------------
+    // Private: keep only rows assigned to a project (0 = all projects)
+    // ----------------------------------------------------------------
+
+    private function _filter_by_project($rows, $project_id) {
+        if ($project_id <= 0) return $rows;
+        return array_values(array_filter(
+            $rows,
+            function ($r) use ($project_id) { return (int)($r['project_id'] ?? 0) === $project_id; }
+        ));
     }
 
     // ----------------------------------------------------------------
@@ -416,7 +502,11 @@ class Payroll extends MY_Controller {
             $uid  = $r['user_id'];
             $rate = $r['daily_rate'] !== null ? (float)$r['daily_rate'] : null;
             $days = (int)$r['days_present'];
-            $gross = $rate !== null ? round($rate * $days, 2) : 0;
+
+            // Approved OT only (filtered in the SQL): daily rate ÷ 8 × OT hours
+            $ot_hours = (float)$r['total_overtime'];
+            $ot_pay   = ($rate !== null && $ot_hours > 0) ? round(($rate / 8) * $ot_hours, 2) : 0;
+            $gross    = $rate !== null ? round($rate * $days + $ot_pay, 2) : 0;
 
             // Government contributions
             $sss        = ($r['sss_enabled']       && $r['sss_amount'])        ? (float)$r['sss_amount']        : 0;
@@ -454,6 +544,8 @@ class Payroll extends MY_Controller {
             $total_deductions = round($govt + $advance_deduct + $borrow_deduct + $line_deduct, 2);
             $net_pay          = round($gross + $line_add - $total_deductions, 2);
 
+            $r['ot_hours']          = $ot_hours;
+            $r['ot_pay']            = $ot_pay;
             $r['gross_pay']         = $gross;
             $r['sss_deduct']        = $sss;
             $r['philhealth_deduct'] = $philhealth;

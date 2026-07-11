@@ -209,6 +209,9 @@ $(document).ready(function () {
         setLoading(false);
     });
 
+    // ── System Settings (super admin card) ───────────────────────
+    initSystemSettings();
+
     // ── Attendance Clock Settings (super admin card) ─────────────
     initAttendanceSettings();
 
@@ -547,6 +550,133 @@ function initProjects() {
                     Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to remove project head.', confirmButtonColor: '#4361ee' });
                 });
         });
+    });
+}
+
+function initSystemSettings() {
+    if ($('#sys-settings-card').length === 0) return; // not super admin
+
+    function setSysLoading(isLoading) {
+        $('#btn-save-sys').prop('disabled', isLoading);
+        $('#sys-spinner').toggleClass('d-none', !isLoading);
+        $('#sys-save-icon').toggleClass('d-none', isLoading);
+    }
+
+    function showLogoPreview(src) {
+        if (src) {
+            $('#sys-logo-preview').attr('src', src).removeClass('d-none');
+            $('#sys-logo-placeholder').addClass('d-none');
+        } else {
+            $('#sys-logo-preview').attr('src', '').addClass('d-none');
+            $('#sys-logo-placeholder').removeClass('d-none');
+        }
+    }
+
+    function selectTheme(slug) {
+        $('.theme-swatch').removeClass('active');
+        const $sw = $('.theme-swatch[data-theme="' + slug + '"]');
+        $sw.addClass('active').find('input').prop('checked', true);
+    }
+
+    // Swatch selection
+    $('#sys-theme-list').on('change', 'input[name="sys-theme"]', function () {
+        selectTheme($(this).val());
+    });
+
+    // Live preview of a newly chosen logo file
+    $('#sys-logo').on('change', function () {
+        const file = this.files && this.files[0];
+        if (!file) return;
+        $('#sys-logo-remove').prop('checked', false);
+        const reader = new FileReader();
+        reader.onload = function (e) { showLogoPreview(e.target.result); };
+        reader.readAsDataURL(file);
+    });
+
+    $('#sys-logo-remove').on('change', function () {
+        if ($(this).is(':checked')) {
+            $('#sys-logo').val('');
+            showLogoPreview('');
+        }
+    });
+
+    // Load current settings
+    $.get(APP_URL + 'system_config/system_settings')
+        .done(function (res) {
+            if (!res.success) return;
+            const s = res.settings;
+            $('#sys-name').val(s.system_name);
+            $('#sys-co-name').val(s.company_name);
+            $('#sys-co-tagline').val(s.company_tagline);
+            $('#sys-co-address').val(s.company_address);
+            $('#sys-co-email').val(s.company_email);
+            $('#sys-co-phone').val(s.company_phone);
+            selectTheme(s.theme || 'blue');
+            showLogoPreview(s.company_logo_url || '');
+        });
+
+    // Save
+    $('#btn-save-sys').on('click', function () {
+        const systemName  = $.trim($('#sys-name').val());
+        const companyName = $.trim($('#sys-co-name').val());
+
+        if (!systemName) {
+            Swal.fire({ icon: 'warning', title: 'Missing field', text: 'System name is required.', confirmButtonColor: '#4361ee' });
+            return;
+        }
+        if (!companyName) {
+            Swal.fire({ icon: 'warning', title: 'Missing field', text: 'Company name is required.', confirmButtonColor: '#4361ee' });
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('system_name',     systemName);
+        fd.append('theme',           $('input[name="sys-theme"]:checked').val() || 'blue');
+        fd.append('company_name',    companyName);
+        fd.append('company_tagline', $.trim($('#sys-co-tagline').val()));
+        fd.append('company_address', $.trim($('#sys-co-address').val()));
+        fd.append('company_email',   $.trim($('#sys-co-email').val()));
+        fd.append('company_phone',   $.trim($('#sys-co-phone').val()));
+
+        const logoFile = $('#sys-logo')[0].files[0];
+        if (logoFile) {
+            fd.append('logo', logoFile);
+        } else if ($('#sys-logo-remove').is(':checked')) {
+            fd.append('remove_logo', '1');
+        }
+
+        setSysLoading(true);
+
+        $.ajax({
+            url         : APP_URL + 'system_config/save_system_settings',
+            method      : 'POST',
+            data        : fd,
+            processData : false,
+            contentType : false,
+        })
+            .done(function (res) {
+                setSysLoading(false);
+                if (res.success) {
+                    Swal.fire({
+                        icon             : 'success',
+                        title            : 'Saved!',
+                        text             : res.message + ' Refreshing to apply…',
+                        confirmButtonColor: '#4361ee',
+                        timer            : 1500,
+                        timerProgressBar : true,
+                        showConfirmButton: false,
+                    }).then(function () {
+                        location.reload(); // apply new theme / name / logo everywhere
+                    });
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Failed', text: res.message, confirmButtonColor: '#4361ee' });
+                }
+            })
+            .fail(function (xhr) {
+                setSysLoading(false);
+                const res = xhr.responseJSON;
+                Swal.fire({ icon: 'error', title: 'Error', text: res ? res.message : 'An unexpected error occurred.', confirmButtonColor: '#4361ee' });
+            });
     });
 }
 

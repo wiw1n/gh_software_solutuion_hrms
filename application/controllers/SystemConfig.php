@@ -11,16 +11,133 @@ class SystemConfig extends MY_Controller {
     }
 
     public function index() {
+        $this->load->model('Setting_model');
         $data = [
             'title'    => 'System Configuration',
             'page_js'  => 'system_config.js',
             'is_super' => $this->is_super_admin(),
+            'themes'   => Setting_model::THEMES,
         ];
 
         $this->load->view('layouts/header', $data);
         $this->load->view('layouts/sidebar', $data);
         $this->load->view('system_config/index', $data);
         $this->load->view('layouts/footer', $data);
+    }
+
+    // ----------------------------------------------------------------
+    // System Settings — branding, company info, theme (super admin only)
+    // ----------------------------------------------------------------
+
+    public function system_settings() {
+        $this->require_role('super_admin');
+        $this->load->model('Setting_model');
+
+        $s = $this->Setting_model->get_all();
+        $this->json([
+            'success'  => true,
+            'settings' => [
+                'system_name'      => $s['system_name'],
+                'theme'            => $s['theme'],
+                'company_name'     => $s['company_name'],
+                'company_tagline'  => $s['company_tagline'],
+                'company_address'  => $s['company_address'],
+                'company_email'    => $s['company_email'],
+                'company_phone'    => $s['company_phone'],
+                'company_logo'     => $s['company_logo'],
+                'company_logo_url' => $s['company_logo'] !== '' ? base_url($s['company_logo']) : '',
+            ],
+        ]);
+    }
+
+    public function save_system_settings() {
+        $this->require_role('super_admin');
+        if ($this->input->method() !== 'post') show_404();
+        $this->load->model('Setting_model');
+
+        $system_name  = trim($this->input->post('system_name', TRUE));
+        $theme        = (string)$this->input->post('theme');
+        $company_name = trim($this->input->post('company_name', TRUE));
+        $tagline      = trim($this->input->post('company_tagline', TRUE));
+        $address      = trim($this->input->post('company_address', TRUE));
+        $email        = trim((string)$this->input->post('company_email'));
+        $phone        = trim($this->input->post('company_phone', TRUE));
+
+        if ($system_name === '') {
+            $this->json(['success' => false, 'message' => 'System name is required.'], 422);
+            return;
+        }
+        if ($company_name === '') {
+            $this->json(['success' => false, 'message' => 'Company name is required.'], 422);
+            return;
+        }
+        if (!array_key_exists($theme, Setting_model::THEMES)) {
+            $theme = 'blue';
+        }
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->json(['success' => false, 'message' => 'Please enter a valid company e-mail address.'], 422);
+            return;
+        }
+
+        $pairs = [
+            'system_name'     => mb_substr($system_name, 0, 255),
+            'theme'           => $theme,
+            'company_name'    => mb_substr($company_name, 0, 255),
+            'company_tagline' => mb_substr($tagline, 0, 255),
+            'company_address' => mb_substr($address, 0, 255),
+            'company_email'   => mb_substr($email, 0, 255),
+            'company_phone'   => mb_substr($phone, 0, 255),
+        ];
+
+        $old_logo = $this->Setting_model->get('company_logo', '');
+
+        if (!empty($_FILES['logo']) && $_FILES['logo']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $file = $_FILES['logo'];
+
+            if ($file['error'] !== UPLOAD_ERR_OK) {
+                $this->json(['success' => false, 'message' => 'Logo upload failed (error code ' . $file['error'] . '). Please try again.'], 422);
+                return;
+            }
+            if ($file['size'] > 2 * 1024 * 1024) {
+                $this->json(['success' => false, 'message' => 'Logo is too large. Maximum size is 2 MB.'], 422);
+                return;
+            }
+
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp'])) {
+                $this->json(['success' => false, 'message' => 'Logo must be a PNG, JPG, GIF or WEBP image.'], 422);
+                return;
+            }
+            if (@getimagesize($file['tmp_name']) === false) {
+                $this->json(['success' => false, 'message' => 'The uploaded file is not a valid image.'], 422);
+                return;
+            }
+
+            $rel_dir = 'assets/uploads/system/';
+            $dir     = FCPATH . $rel_dir;
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+
+            $filename = 'logo_' . date('Ymd_His') . '.' . $ext;
+            if (!move_uploaded_file($file['tmp_name'], $dir . $filename)) {
+                $this->json(['success' => false, 'message' => 'Failed to save the uploaded logo.'], 500);
+                return;
+            }
+
+            $pairs['company_logo'] = $rel_dir . $filename;
+        } elseif ($this->input->post('remove_logo') === '1') {
+            $pairs['company_logo'] = '';
+        }
+
+        // Clean up the replaced/removed logo file
+        if (isset($pairs['company_logo']) && $old_logo !== '' && $pairs['company_logo'] !== $old_logo
+            && strpos($old_logo, 'assets/uploads/system/') === 0 && is_file(FCPATH . $old_logo)) {
+            @unlink(FCPATH . $old_logo);
+        }
+
+        $this->Setting_model->set_many($pairs);
+        $this->json(['success' => true, 'message' => 'System settings saved.']);
     }
 
     // ----------------------------------------------------------------

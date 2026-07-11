@@ -152,13 +152,18 @@ $total_net        = array_sum(array_column($rows, 'net_pay'));
 
 <!-- Header -->
 <div class="header">
-    <div>
+    <div style="display:flex;align-items:center;gap:12px;">
+        <?php if (!empty($company['company_logo'])): ?>
+        <img src="<?= base_url($company['company_logo']) ?>" alt="Logo" style="width:46px;height:46px;object-fit:contain;flex:0 0 auto;">
+        <?php endif; ?>
+        <div>
         <h1>
-            GH Software Solution
+            <?= htmlspecialchars($company['company_name'] ?? 'Payroll') ?>
             <span>Payroll Report</span>
         </h1>
         <div class="period">
             <?= $period_type_label ?> Payroll: <?= date('M d, Y', strtotime($week_start)) ?> &ndash; <?= date('M d, Y', strtotime($week_end)) ?>
+        </div>
         </div>
     </div>
     <div class="meta">
@@ -329,7 +334,7 @@ $total_net        = array_sum(array_column($rows, 'net_pay'));
 
 <!-- Document Footer -->
 <div class="doc-footer">
-    <span>GH Software Solution &mdash; Payroll Report &mdash; Prepared by accounting</span>
+    <span><?= htmlspecialchars($company['company_name'] ?? '') ?> &mdash; Payroll Report &mdash; Prepared by accounting</span>
     <span>Period: <?= date('M d', strtotime($week_start)) ?> &ndash; <?= date('M d, Y', strtotime($week_end)) ?> (<?= $period_type_label ?>) &mdash; Generated <?= date('M d, Y h:i A') ?></span>
 </div>
 

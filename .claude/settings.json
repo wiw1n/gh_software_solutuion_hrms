@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check assets/js/attendance.js)",
+      "Bash(node --check assets/js/employee_view.js)",
+      "Bash(/c/xampp_8_2_12/mysql/bin/mysql.exe -uroot -proot gh_software_db -e \"DESCRIBE attendance;\")",
+      "Bash(./mysql.exe -uroot -proot gh_software_db -e \"DESCRIBE attendance;\")",
+      "Bash(/c/xampp_8_2_12/php/php.exe \"C:\\\\Users\\\\gerwi\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--xampp-8-2-12-htdocs-gh-software-solution\\\\d7aefffb-095d-4bc4-b588-ae4b40726df5\\\\scratchpad\\\\check_ot.php\")",
+      "Bash(/c/xampp_8_2_12/php/php.exe -l application/models/Setting_model.php)",
+      "Bash(/c/xampp_8_2_12/php/php.exe -l application/models/Attendance_model.php)",
+      "Bash(/c/xampp_8_2_12/php/php.exe index.php otcheck run)",
+      "Bash(/c/xampp_8_2_12/php/php.exe -l application/controllers/Attendance.php)",
+      "Bash(grep -v \"^Warning\\\\|HTTP_HOST\\\\|Severity\\\\|Message\\\\|Filename\\\\|Line Number\\\\|Backtrace\\\\|File:\\\\|Line:\\\\|Function:\\\\|^$\\\\|A PHP Error\")",
+      "Bash(/c/xampp_8_2_12/php/php.exe -r '$db=new mysqli\\('\\\\''localhost'\\\\'','\\\\''root'\\\\'','\\\\''root'\\\\'','\\\\''gh_software_db'\\\\''\\); $r=$db->query\\(\"SHOW COLUMNS FROM attendance LIKE '\\\\''status'\\\\''\"\\)->fetch_assoc\\(\\); print_r\\($r\\);')"
+    ]
+  }
+}

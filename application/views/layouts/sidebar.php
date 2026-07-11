@@ -14,6 +14,16 @@ $role_badge_class = match($role_slug) {
 $has_sidebar = in_array($role_slug, ['super_admin', 'admin', 'project_head']);
 
 $initials = strtoupper(substr($user['first_name'] ?? '', 0, 1) . substr($user['last_name'] ?? '', 0, 1));
+
+// Site branding (System Config → System Settings)
+$CI =& get_instance();
+$CI->load->model('Setting_model');
+$site = $CI->Setting_model->get_all();
+
+// Keep the two-line brand look: last word becomes the small sub-line
+$brand_words = preg_split('/\s+/', trim($site['system_name']));
+$brand_sub   = count($brand_words) > 1 ? strtoupper(array_pop($brand_words)) : '';
+$brand_main  = implode(' ', $brand_words);
 ?>
 
 <!-- ═══ SIDEBAR ═══ -->
@@ -22,12 +32,18 @@ $initials = strtoupper(substr($user['first_name'] ?? '', 0, 1) . substr($user['l
 
     <!-- Brand -->
     <div class="sb-brand">
-        <div class="logo-box">
+        <div class="logo-box" <?= !empty($site['company_logo']) ? 'style="background:#fff;overflow:hidden;"' : '' ?>>
+            <?php if (!empty($site['company_logo'])): ?>
+            <img src="<?= base_url($site['company_logo']) ?>" alt="Logo" style="width:100%;height:100%;object-fit:contain;">
+            <?php else: ?>
             <i class="fas fa-cubes text-white" style="font-size:.95rem;"></i>
+            <?php endif; ?>
         </div>
         <div>
-            <div class="brand-name">GH Software</div>
-            <div class="brand-sub">SOLUTION</div>
+            <div class="brand-name"><?= htmlspecialchars($brand_main) ?></div>
+            <?php if ($brand_sub !== ''): ?>
+            <div class="brand-sub"><?= htmlspecialchars($brand_sub) ?></div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -184,6 +200,13 @@ $initials = strtoupper(substr($user['first_name'] ?? '', 0, 1) . substr($user['l
                     </div>
                 </li>
                 <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#editProfileModal">
+                        <i class="fas fa-user-edit me-2 text-primary"></i>
+                        <span>Edit Profile</span>
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider my-1"></li>
+                <li>
                     <a class="dropdown-item" href="<?= base_url('auth/logout') ?>">
                         <i class="fas fa-sign-out-alt me-2 text-danger"></i>
                         <span class="text-danger">Logout</span>
@@ -193,6 +216,69 @@ $initials = strtoupper(substr($user['first_name'] ?? '', 0, 1) . substr($user['l
         </div>
     </div>
     <!-- /Topbar -->
+
+    <!-- Edit Profile Modal -->
+    <div class="modal fade" id="editProfileModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <form id="edit-profile-form" autocomplete="off">
+                    <div class="modal-header">
+                        <h6 class="modal-title fw-bold">
+                            <i class="fas fa-user-edit me-2 text-primary"></i>Edit Personal Information
+                        </h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">First Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" name="first_name"
+                                       value="<?= htmlspecialchars($user['first_name'] ?? '') ?>" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Last Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" name="last_name"
+                                       value="<?= htmlspecialchars($user['last_name'] ?? '') ?>" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold">Email <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control form-control-sm" name="email"
+                                       value="<?= htmlspecialchars($user['email'] ?? '') ?>" required>
+                            </div>
+                            <div class="col-12">
+                                <hr class="my-1">
+                                <div class="text-muted small mb-2">
+                                    <i class="fas fa-lock me-1"></i>Change password (leave blank to keep current)
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold">Current Password</label>
+                                <input type="password" class="form-control form-control-sm" name="current_password"
+                                       autocomplete="current-password">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">New Password</label>
+                                <input type="password" class="form-control form-control-sm" name="new_password"
+                                       minlength="6" autocomplete="new-password">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Confirm New Password</label>
+                                <input type="password" class="form-control form-control-sm" name="confirm_password"
+                                       autocomplete="new-password">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary" id="edit-profile-save-btn">
+                            <i class="fas fa-save me-1"></i>Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- /Edit Profile Modal -->
 
     <!-- Page Content -->
     <div id="page-content">

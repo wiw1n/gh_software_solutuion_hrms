@@ -9,10 +9,27 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  *   attendance_mode — 'am_pm' (AM + PM sessions, the default) | 'single'
  *   sched_am_in / sched_am_out / sched_pm_in / sched_pm_out — AM/PM schedule
  *   sched_day_in / sched_day_out — schedule for single in/out mode
+ *
+ * System / branding settings (super admin configurable in System Config):
+ *   system_name  — app name shown in the sidebar brand and page titles
+ *   theme        — color preset slug (see self::THEMES)
+ *   company_*    — company profile printed on form letterheads
+ *   company_logo — relative path of the uploaded logo (empty = none)
  */
 class Setting_model extends CI_Model {
 
     private $table = 'system_settings';
+
+    // Color presets applied through the :root CSS variables in the layout header.
+    const THEMES = [
+        'blue'   => ['label' => 'Royal Blue',  'accent' => '#4361ee', 'accent_dark' => '#3451d1', 'sidebar' => '#1a2442'],
+        'teal'   => ['label' => 'Teal',        'accent' => '#0d9488', 'accent_dark' => '#0f766e', 'sidebar' => '#12302d'],
+        'green'  => ['label' => 'Green',       'accent' => '#16a34a', 'accent_dark' => '#15803d', 'sidebar' => '#14291b'],
+        'purple' => ['label' => 'Purple',      'accent' => '#7c3aed', 'accent_dark' => '#6d28d9', 'sidebar' => '#231a3d'],
+        'maroon' => ['label' => 'Maroon',      'accent' => '#b91c1c', 'accent_dark' => '#991b1b', 'sidebar' => '#2c1515'],
+        'orange' => ['label' => 'Orange',      'accent' => '#ea580c', 'accent_dark' => '#c2410c', 'sidebar' => '#2f1d10'],
+        'slate'  => ['label' => 'Slate',       'accent' => '#475569', 'accent_dark' => '#334155', 'sidebar' => '#0f172a'],
+    ];
 
     private $defaults = [
         'attendance_mode' => 'am_pm',
@@ -22,7 +39,18 @@ class Setting_model extends CI_Model {
         'sched_pm_out'    => '17:00',
         'sched_day_in'    => '08:00',
         'sched_day_out'   => '17:00',
+        'system_name'     => 'GH Software Solution',
+        'theme'           => 'blue',
+        'company_name'    => 'KAMARI CONSTRUCTION AND SUPPLY',
+        'company_tagline' => 'GENERAL ENGINEERING GENERAL BUILDING',
+        'company_address' => 'Msgr. Lino Gonzaga St. Brgy. II Poblacion, Jaro, Leyte',
+        'company_email'   => 'kamari.construction@gmail.com',
+        'company_phone'   => '+63910-976-0000',
+        'company_logo'    => '',
     ];
+
+    // Settings are read by the layout header + sidebar on every page; cache per request.
+    private static $cache = null;
 
     public function __construct() {
         parent::__construct();
@@ -35,11 +63,14 @@ class Setting_model extends CI_Model {
 
     // All settings merged over defaults.
     public function get_all() {
+        if (self::$cache !== null) {
+            return self::$cache;
+        }
         $settings = $this->defaults;
         foreach ($this->db->get($this->table)->result_array() as $row) {
             $settings[$row['key']] = $row['value'];
         }
-        return $settings;
+        return self::$cache = $settings;
     }
 
     public function get($key, $fallback = null) {
@@ -49,11 +80,17 @@ class Setting_model extends CI_Model {
     }
 
     public function set($key, $value) {
+        self::$cache = null;
         $this->db->replace($this->table, [
             'key'        => $key,
             'value'      => (string)$value,
             'updated_at' => date('Y-m-d H:i:s'),
         ]);
+    }
+
+    // Colors for the active (or given) theme preset.
+    public static function theme_colors($slug) {
+        return self::THEMES[$slug] ?? self::THEMES['blue'];
     }
 
     public function set_many(array $pairs) {
