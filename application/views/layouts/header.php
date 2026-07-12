@@ -22,8 +22,8 @@ $theme_cols = Setting_model::theme_colors($site['theme']);
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
     <!-- SweetAlert2 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <!-- App Stylesheet -->
-    <link rel="stylesheet" href="<?= base_url('assets/css/style.css') ?>">
+    <!-- App Stylesheet (?v= busts browser/proxy caches whenever the file changes) -->
+    <link rel="stylesheet" href="<?= base_url('assets/css/style.css') ?>?v=<?= @filemtime(FCPATH . 'assets/css/style.css') ?>">
     <!-- Theme override (System Config → System Settings) -->
     <style>
         :root {

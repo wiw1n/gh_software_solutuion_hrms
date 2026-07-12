@@ -8,6 +8,12 @@ class MY_Controller extends CI_Controller {
     public function __construct() {
         parent::__construct();
         $this->auth_user = $this->session->userdata('user');
+
+        // Dashboard pages are per-user and DB-driven — forbid browser heuristic
+        // caching and LiteSpeed page caching (Hostinger enables it by default).
+        $this->output
+            ->set_header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0')
+            ->set_header('X-LiteSpeed-Cache-Control: no-cache');
     }
 
     protected function require_login() {

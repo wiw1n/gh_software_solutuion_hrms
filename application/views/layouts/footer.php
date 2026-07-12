@@ -15,14 +15,14 @@
 <script>window.APP_URL = window.APP_URL || '<?= base_url() ?>';</script>
 
 <!-- Global: notifications -->
-<script src="<?= base_url('assets/js/notifications.js') ?>"></script>
+<script src="<?= base_url('assets/js/notifications.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/notifications.js') ?>"></script>
 
 <!-- Global: edit profile modal -->
-<script src="<?= base_url('assets/js/profile.js') ?>"></script>
+<script src="<?= base_url('assets/js/profile.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/profile.js') ?>"></script>
 
 <!-- Page-specific JS file -->
 <?php if (!empty($page_js)): ?>
-<script src="<?= base_url('assets/js/' . $page_js) ?>"></script>
+<script src="<?= base_url('assets/js/' . $page_js) ?>?v=<?= @filemtime(FCPATH . 'assets/js/' . $page_js) ?>"></script>
 <?php endif; ?>
 
 <script>

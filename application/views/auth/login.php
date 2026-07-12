@@ -13,8 +13,8 @@ $site = $CI->Setting_model->get_all();
     <link rel="apple-touch-icon" href="<?= base_url('assets/img/favicon-180.png') ?>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <!-- App Stylesheet -->
-    <link rel="stylesheet" href="<?= base_url('assets/css/style.css') ?>">
+    <!-- App Stylesheet (?v= busts browser/proxy caches whenever the file changes) -->
+    <link rel="stylesheet" href="<?= base_url('assets/css/style.css') ?>?v=<?= @filemtime(FCPATH . 'assets/css/style.css') ?>">
 </head>
 <body class="login-body">
 <div class="login-wrapper">

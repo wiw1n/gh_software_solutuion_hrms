@@ -1,10 +1,17 @@
+# Hostinger runs LiteSpeed with automatic page caching — never cache the app's
+# dynamic pages (theme/branding are rendered from the DB on every request).
+<IfModule LiteSpeed>
+    CacheDisable public /
+</IfModule>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Route everything through index.php, unless it's a real file or directory
+    # Route everything through index.php, unless it's a real file or directory.
+    # E=Cache-Control:no-cache tells LiteSpeed not to page-cache these responses.
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^(.*)$ index.php?/$1 [L]
+    RewriteRule ^(.*)$ index.php?/$1 [L,E=Cache-Control:no-cache]
 </IfModule>
 
 <IfModule !mod_rewrite.c>
