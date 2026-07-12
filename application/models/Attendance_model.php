@@ -384,6 +384,53 @@ class Attendance_model extends CI_Model {
             ->get()->result_array();
     }
 
+    // Today's punches flattened to one row per scan event, newest first
+    // (scan station line table): employee id, name, action in/out, time, photo.
+    public function get_today_punch_logs() {
+        $rows = $this->db
+            ->select('a.time_in, a.time_out, a.time_in_photo, a.time_out_photo,
+                      a.am_time_in, a.am_time_out, a.pm_time_in, a.pm_time_out,
+                      a.am_time_in_photo, a.am_time_out_photo,
+                      a.pm_time_in_photo, a.pm_time_out_photo,
+                      u.employee_id, u.first_name, u.last_name, jr.name AS job_role_name')
+            ->from($this->table . ' a')
+            ->join('users u', 'u.id = a.user_id')
+            ->join('job_roles jr', 'jr.id = u.job_role_id', 'left')
+            ->where('a.date', date('Y-m-d'))
+            ->get()->result_array();
+
+        $logs = [];
+        foreach ($rows as $r) {
+            // Legacy/single-mode records have no AM/PM punches — fall back
+            // to the plain time_in/time_out pair.
+            $has_sessions = $r['am_time_in'] || $r['am_time_out'] || $r['pm_time_in'] || $r['pm_time_out'];
+            $map = $has_sessions
+                ? [['am_time_in', 'in',  'AM Time In',  'am_time_in_photo'],
+                   ['am_time_out','out', 'AM Time Out', 'am_time_out_photo'],
+                   ['pm_time_in', 'in',  'PM Time In',  'pm_time_in_photo'],
+                   ['pm_time_out','out', 'PM Time Out', 'pm_time_out_photo']]
+                : [['time_in',  'in',  'Time In',  'time_in_photo'],
+                   ['time_out', 'out', 'Time Out', 'time_out_photo']];
+
+            foreach ($map as $m) {
+                if (empty($r[$m[0]])) continue;
+                $logs[] = [
+                    'employee_id'   => $r['employee_id'],
+                    'first_name'    => $r['first_name'],
+                    'last_name'     => $r['last_name'],
+                    'job_role_name' => $r['job_role_name'],
+                    'action'        => $m[1],
+                    'label'         => $m[2],
+                    'time'          => $r[$m[0]],
+                    'photo'         => $r[$m[3]],
+                ];
+            }
+        }
+
+        usort($logs, function ($a, $b) { return strcmp($b['time'], $a['time']); });
+        return $logs;
+    }
+
     // ================================================================
     // Monthly Data
     // ================================================================

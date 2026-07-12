@@ -27,6 +27,7 @@
             letter-spacing: .15em;
             font-size: 1.15rem;
             min-height: 3.2rem;
+            text-transform: uppercase;
         }
         #btn-scan-enter { min-width: 6rem; font-size: 1.05rem; }
 
@@ -127,11 +128,11 @@
                             Today's Time In / Time Out Logs
                         </h6>
                         <div class="d-flex gap-2">
-                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
-                                <i class="fas fa-sign-in-alt me-1"></i><span id="cnt-in">0</span> Clocked In
-                            </span>
                             <span class="badge bg-success-subtle text-success border border-success-subtle">
-                                <i class="fas fa-check-circle me-1"></i><span id="cnt-done">0</span> Completed
+                                <i class="fas fa-sign-in-alt me-1"></i><span id="cnt-in">0</span> Time In
+                            </span>
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                <i class="fas fa-sign-out-alt me-1"></i><span id="cnt-out">0</span> Time Out
                             </span>
                             <button class="btn btn-sm btn-outline-secondary" id="btn-refresh-logs" title="Refresh">
                                 <i class="fas fa-sync-alt"></i>
@@ -143,24 +144,17 @@
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th rowspan="2" class="align-middle" style="width:44px">#</th>
-                                    <th rowspan="2" class="align-middle">Employee</th>
-                                    <th colspan="2" class="text-center border-start">AM</th>
-                                    <th colspan="2" class="text-center border-start">PM</th>
-                                    <th rowspan="2" class="text-center align-middle border-start" style="width:80px">Hours</th>
-                                    <th rowspan="2" class="text-center align-middle" style="width:90px">Late (min)</th>
-                                    <th rowspan="2" class="text-center align-middle" style="width:105px">Status</th>
-                                </tr>
-                                <tr>
-                                    <th class="text-center border-start small" style="width:95px">Time In</th>
-                                    <th class="text-center small" style="width:95px">Time Out</th>
-                                    <th class="text-center border-start small" style="width:95px">Time In</th>
-                                    <th class="text-center small" style="width:95px">Time Out</th>
+                                    <th style="width:44px">#</th>
+                                    <th style="width:130px">Employee ID</th>
+                                    <th>Name</th>
+                                    <th class="text-center" style="width:140px">Action</th>
+                                    <th class="text-center" style="width:110px">Time</th>
+                                    <th class="text-center" style="width:80px">Photo</th>
                                 </tr>
                             </thead>
                             <tbody id="scan-logs-tbody">
                                 <tr>
-                                    <td colspan="9" class="text-center py-4 text-muted">
+                                    <td colspan="6" class="text-center py-4 text-muted">
                                         <span class="spinner-border spinner-border-sm text-primary me-2"></span>Loading…
                                     </td>
                                 </tr>
@@ -171,6 +165,51 @@
             </div>
         </div>
 
+    </div>
+</div>
+
+<!-- ================================================================
+     Camera Modal — opens after a badge scan so the punch is recorded
+     with a photo (same flow as the timesheet clock in/out).
+================================================================ -->
+<div class="modal fade" id="scan-cam-modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+        <div class="modal-content border-0 shadow">
+
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-camera me-2 text-primary"></i><span id="cam-name">Photo Capture</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-4 text-center">
+                <div class="position-relative d-inline-block w-100" style="background:#000;border-radius:8px;overflow:hidden;min-height:260px;">
+                    <video id="cam-video" autoplay playsinline class="w-100" style="border-radius:8px;display:block;"></video>
+                    <canvas id="cam-canvas" class="d-none"></canvas>
+                    <img id="cam-preview" class="w-100 d-none" style="border-radius:8px;" alt="Captured photo">
+                </div>
+                <p class="text-muted small mt-2 mb-0" id="cam-hint">Look at the camera, then tap Capture.</p>
+            </div>
+
+            <div class="modal-footer border-0 pt-0 justify-content-between">
+                <div>
+                    <button class="btn btn-outline-secondary d-none" id="btn-cam-retake">
+                        <i class="fas fa-redo me-1"></i>Retake
+                    </button>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary" id="btn-cam-capture" style="min-width:7rem;">
+                        <i class="fas fa-camera me-1"></i>Capture
+                    </button>
+                    <button class="btn btn-success d-none" id="btn-cam-confirm" style="min-width:7rem;">
+                        <i class="fas fa-check me-1"></i>Continue
+                    </button>
+                </div>
+            </div>
+
+        </div>
     </div>
 </div>
 

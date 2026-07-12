@@ -96,6 +96,8 @@ $(document).ready(function () {
     function hidePunchPanel() {
         clearTimeout(panelTimer);
         panelCode = null;
+        scanPhoto = null;
+        pendingScan = null;
         $panel.addClass('d-none');
     }
 
@@ -156,14 +158,111 @@ $(document).ready(function () {
         return res.message;
     }
 
-    // Employee picked a punch — record it
+    // ── Camera capture (opens right after a badge scan) ──────────
+    // The photo taken here is attached to whichever punch the employee
+    // selects next — same proof-of-presence idea as the timesheet
+    // clock in/out camera.
+
+    const camModalEl = document.getElementById('scan-cam-modal');
+    let camStream    = null;
+    let scanPhoto    = null;   // base64 jpeg for the punch about to be recorded
+    let pendingScan  = null;   // {code, name, punches, hint} waiting on the camera
+    let camConfirmed = false;
+
+    function stopCam() {
+        if (camStream) {
+            camStream.getTracks().forEach(function (t) { t.stop(); });
+            camStream = null;
+        }
+    }
+
+    function proceedToPunch() {
+        if (!pendingScan) return;
+        showPunchPanel(pendingScan.code, pendingScan.name, pendingScan.punches, pendingScan.hint);
+    }
+
+    function openScanCamera(code, res) {
+        pendingScan  = { code: code, name: res.name, punches: res.punches || [], hint: res.message };
+        scanPhoto    = null;
+        camConfirmed = false;
+
+        $('#cam-name').text(res.name);
+        $('#cam-video').removeClass('d-none');
+        $('#cam-preview').addClass('d-none').attr('src', '');
+        $('#btn-cam-capture').removeClass('d-none');
+        $('#btn-cam-retake, #btn-cam-confirm').addClass('d-none');
+        $('#cam-hint').text('Look at the camera, then tap Capture.');
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            proceedToPunch();   // station has no camera — record without photo
+            return;
+        }
+
+        navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+        })
+            .then(function (stream) {
+                camStream = stream;
+                document.getElementById('cam-video').srcObject = stream;
+                bootstrap.Modal.getOrCreateInstance(camModalEl).show();
+            })
+            .catch(function () {
+                showFeedback('ignored', res.name, 'Camera unavailable — continuing without a photo.');
+                proceedToPunch();
+            });
+    }
+
+    $('#btn-cam-capture').on('click', function () {
+        const video  = document.getElementById('cam-video');
+        const canvas = document.getElementById('cam-canvas');
+        canvas.width  = video.videoWidth  || 640;
+        canvas.height = video.videoHeight || 480;
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        scanPhoto = canvas.toDataURL('image/jpeg', 0.85);
+
+        $('#cam-preview').attr('src', scanPhoto).removeClass('d-none');
+        $('#cam-video').addClass('d-none');
+        $(this).addClass('d-none');
+        $('#btn-cam-retake, #btn-cam-confirm').removeClass('d-none');
+        $('#cam-hint').text('Photo captured. Tap Continue to pick Time In / Time Out.');
+    });
+
+    $('#btn-cam-retake').on('click', function () {
+        scanPhoto = null;
+        $('#cam-preview').addClass('d-none').attr('src', '');
+        $('#cam-video').removeClass('d-none');
+        $('#btn-cam-capture').removeClass('d-none');
+        $('#btn-cam-retake, #btn-cam-confirm').addClass('d-none');
+        $('#cam-hint').text('Look at the camera, then tap Capture.');
+    });
+
+    $('#btn-cam-confirm').on('click', function () {
+        camConfirmed = true;
+        bootstrap.Modal.getInstance(camModalEl).hide();
+    });
+
+    $(camModalEl).on('hidden.bs.modal', function () {
+        stopCam();
+        if (camConfirmed) {
+            proceedToPunch();
+        } else {
+            // Cancelled — drop the scan entirely
+            scanPhoto   = null;
+            pendingScan = null;
+            refocusInput();
+        }
+    });
+
+    // Employee picked a punch — record it (with the captured photo, if any)
     $('#pp-buttons').on('click', 'button[data-punch]', function () {
         const punch = $(this).attr('data-punch');
         if (!panelCode || scanning) return;
         scanning = true;
 
-        $.post(SCANNER_APP_URL + 'attendance/scan', { code: panelCode, punch: punch })
+        $.post(SCANNER_APP_URL + 'attendance/scan', { code: panelCode, punch: punch, photo: scanPhoto || '' })
             .done(function (res) {
+                scanPhoto = null; // photo belongs to the punch just recorded
                 showFeedback(res.action, res.name, scanDetail(res));
                 beep(true);
                 if (res.punches) {
@@ -193,7 +292,7 @@ $(document).ready(function () {
     $('#scan-form').on('submit', function (e) {
         e.preventDefault();
 
-        const code = $input.val().trim();
+        const code = $input.val().trim().toUpperCase();
         $input.val('');
         if (!code || scanning) return;
         scanning = true;
@@ -202,7 +301,14 @@ $(document).ready(function () {
             .done(function (res) {
                 if (res.action === 'select') {
                     beep(true);
-                    showPunchPanel(code, res.name, res.punches || [], res.message);
+                    const pending = (res.punches || []).some(function (p) { return !p.done; });
+                    if (pending) {
+                        // Take the proof photo first, then pick the punch
+                        openScanCamera(code, res);
+                    } else {
+                        // Everything already recorded — no photo needed
+                        showPunchPanel(code, res.name, res.punches || [], res.message);
+                    }
                     return;
                 }
                 showFeedback(res.action, res.name, scanDetail(res));
@@ -243,65 +349,53 @@ $(document).ready(function () {
             });
     }
 
+    // One row per punch event: employee id, name, action in/out, time, photo
     function renderLogs(logs) {
         const $tbody = $('#scan-logs-tbody');
         $tbody.empty();
 
-        let cntIn = 0, cntDone = 0;
+        let cntIn = 0, cntOut = 0;
 
         if (!logs.length) {
             $tbody.append(
-                '<tr><td colspan="9" class="text-center py-4 text-muted">' +
+                '<tr><td colspan="6" class="text-center py-4 text-muted">' +
                 '<i class="fas fa-inbox fa-lg d-block mb-2 opacity-50"></i>' +
                 'No logs yet today — waiting for the first scan.</td></tr>'
             );
         }
 
-        function timeCell(t, inOut) {
-            if (!t) return '<td class="text-center"><span class="text-muted">—</span></td>';
-            const cls = inOut === 'in' ? 'text-success' : 'text-danger';
-            return '<td class="text-center"><span class="' + cls + ' fw-semibold">' + fmtTime(t) + '</span></td>';
-        }
-
         logs.forEach(function (r, i) {
-            // Legacy/single-mode records have no AM/PM punches — show their
-            // plain time_in/time_out in the AM columns instead.
-            const hasSessions = r.am_time_in || r.am_time_out || r.pm_time_in || r.pm_time_out;
-            const amIn  = hasSessions ? r.am_time_in  : r.time_in;
-            const amOut = hasSessions ? r.am_time_out : r.time_out;
-            const pmIn  = hasSessions ? r.pm_time_in  : null;
-            const pmOut = hasSessions ? r.pm_time_out : null;
+            const isIn = r.action === 'in';
+            if (isIn) cntIn++; else cntOut++;
 
-            const done = hasSessions ? !!r.pm_time_out : !!r.time_out;
-            if (done) cntDone++; else if (r.time_in) cntIn++;
+            const badge = isIn
+                ? '<span class="badge bg-success-subtle text-success border border-success-subtle">' +
+                  '<i class="fas fa-sign-in-alt me-1"></i>' + esc(r.label || 'Time In') + '</span>'
+                : '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">' +
+                  '<i class="fas fa-sign-out-alt me-1"></i>' + esc(r.label || 'Time Out') + '</span>';
 
-            const late = parseFloat(r.tardiness) || 0;
-            const statusBadge = done
-                ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Completed</span>'
-                : '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">In Progress</span>';
+            const photo = r.photo
+                ? '<a href="' + SCANNER_APP_URL + esc(r.photo) + '" target="_blank" title="View photo">' +
+                  '<img src="' + SCANNER_APP_URL + esc(r.photo) + '" alt="photo" ' +
+                  'style="width:36px;height:36px;object-fit:cover;border-radius:6px;"></a>'
+                : '<span class="text-muted">—</span>';
 
             $tbody.append(
                 '<tr>' +
                 '<td class="text-muted small">' + (i + 1) + '</td>' +
+                '<td class="fw-semibold">' + esc(r.employee_id || '—') + '</td>' +
                 '<td><div class="fw-semibold">' + esc(r.first_name + ' ' + r.last_name) + '</div>' +
                     '<div class="text-muted" style="font-size:.72rem;">' + esc(r.job_role_name || '') + '</div></td>' +
-                timeCell(amIn, 'in') +
-                timeCell(amOut, 'out') +
-                timeCell(pmIn, 'in') +
-                timeCell(pmOut, 'out') +
-                '<td class="text-center">' +
-                    (r.total_hours ? parseFloat(r.total_hours).toFixed(2) : '<span class="text-muted">—</span>') +
-                '</td>' +
-                '<td class="text-center">' +
-                    (late > 0 ? '<span class="text-danger">' + Math.round(late) + '</span>' : '<span class="text-muted">—</span>') +
-                '</td>' +
-                '<td class="text-center">' + statusBadge + '</td>' +
+                '<td class="text-center">' + badge + '</td>' +
+                '<td class="text-center"><span class="' + (isIn ? 'text-success' : 'text-danger') +
+                    ' fw-semibold">' + fmtTime(r.time) + '</span></td>' +
+                '<td class="text-center">' + photo + '</td>' +
                 '</tr>'
             );
         });
 
         $('#cnt-in').text(cntIn);
-        $('#cnt-done').text(cntDone);
+        $('#cnt-out').text(cntOut);
     }
 
     $('#btn-refresh-logs').on('click', loadLogs);

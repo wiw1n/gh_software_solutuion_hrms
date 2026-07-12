@@ -202,8 +202,18 @@ class Attendance extends MY_Controller {
             return;
         }
 
+        // Photo captured on the kiosk camera after the badge scan (optional —
+        // the station may have no webcam).
+        $photo_path = null;
+        $photo_data = (string)$this->input->post('photo');
+        if ($photo_data !== '') {
+            $suffix     = $punch === 'time_in' ? 'in' : ($punch === 'time_out' ? 'out' : $punch);
+            $saved      = $this->_save_photo($photo_data, $user['id'], $suffix, $user['last_name']);
+            $photo_path = $saved !== false ? $saved : null;
+        }
+
         $is_in = in_array($punch, ['time_in', 'am_in', 'pm_in']);
-        $this->Attendance_model->record_punch($user['id'], $punch);
+        $this->Attendance_model->record_punch($user['id'], $punch, $photo_path);
 
         $rec   = $this->Attendance_model->get_today($user['id']);
         $time  = $this->Attendance_model->punch_value($rec, $punch);
@@ -248,12 +258,12 @@ class Attendance extends MY_Controller {
         return $labels[$punch] ?? 'Punch';
     }
 
-    // AJAX: today's in/out logs for the scan station table
+    // AJAX: today's punches, one row per scan event (scan station table)
     public function today_logs() {
         $this->require_role('super_admin', 'admin');
         $this->json([
             'success' => true,
-            'logs'    => $this->Attendance_model->get_today_logs(),
+            'logs'    => $this->Attendance_model->get_today_punch_logs(),
         ]);
     }
 
