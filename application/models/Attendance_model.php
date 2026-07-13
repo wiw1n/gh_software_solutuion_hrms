@@ -158,12 +158,14 @@ class Attendance_model extends CI_Model {
         return false;
     }
 
-    // Record a specific punch chosen on the scan station.
-    public function record_punch($user_id, $punch, $photo_path = null) {
-        $rec = $this->get_today($user_id);
+    // Record a specific punch chosen on the scan station. $date/$time
+    // default to now; device imports pass the punch's own timestamp.
+    public function record_punch($user_id, $punch, $photo_path = null, $date = null, $time = null) {
+        $date = $date ?: date('Y-m-d');
+        $rec  = $this->get_by_date($user_id, $date);
         if (!$this->can_punch($rec, $punch)) return false;
 
-        $now = date('H:i:s');
+        $now = $time ?: date('H:i:s');
 
         if (in_array($punch, ['time_in', 'am_in', 'pm_in'])) {
             if ($punch === 'time_in') {
@@ -193,7 +195,7 @@ class Attendance_model extends CI_Model {
                 return $this->db->where('id', $rec['id'])->update($this->table, $data);
             }
             $data['user_id'] = $user_id;
-            $data['date']    = date('Y-m-d');
+            $data['date']    = $date;
             $this->db->insert($this->table, $data);
             return $this->db->insert_id();
         }
@@ -231,6 +233,50 @@ class Attendance_model extends CI_Model {
         return $this->db->where('id', $rec['id'])->update($this->table, $data);
     }
 
+    // Punches recorded within this window of the previous one are treated
+    // as accidental double-taps on the terminal and ignored.
+    const DEVICE_DUP_SECS = 120;
+
+    // Applies a punch coming from a biometric terminal (ADMS push or file
+    // import) at its recorded timestamp. The slot is chosen by the same
+    // state machine as live punches but evaluated against the punch's own
+    // time, so historical logs replay correctly when processed in
+    // chronological order. Returns the slot recorded, 'done' when the day
+    // is already complete, or 'skipped' (out of order / double-tap).
+    public function apply_device_punch($user_id, $datetime) {
+        $ts = strtotime($datetime);
+        if (!$ts) return 'skipped';
+        $date = date('Y-m-d', $ts);
+        $time = date('H:i:s', $ts);
+
+        $rec  = $this->get_by_date($user_id, $date);
+        $last = $this->last_punch_time($rec);
+        if ($last && ($time <= $last
+                || strtotime($time) - strtotime($last) < self::DEVICE_DUP_SECS)) {
+            return 'skipped';
+        }
+
+        if ($this->cfg['mode'] === 'single') {
+            if (!$rec || empty($rec['time_in'])) $punch = 'time_in';
+            elseif (empty($rec['time_out']))     $punch = 'time_out';
+            else return 'done';
+        } else {
+            if (!$rec || (empty($rec['am_time_in']) && empty($rec['pm_time_in']))) {
+                $punch = $time >= $this->cfg['pm_in'] ? 'pm_in' : 'am_in';
+            } elseif (!empty($rec['am_time_in']) && empty($rec['am_time_out'])) {
+                $punch = 'am_out';
+            } elseif (empty($rec['pm_time_in'])) {
+                $punch = 'pm_in';
+            } elseif (empty($rec['pm_time_out'])) {
+                $punch = 'pm_out';
+            } else {
+                return 'done';
+            }
+        }
+
+        return $this->record_punch($user_id, $punch, null, $date, $time) ? $punch : 'skipped';
+    }
+
     // Most recent punch time on a record (for duplicate-scan guards).
     public function last_punch_time($rec) {
         if (!$rec) return null;
@@ -264,9 +310,13 @@ class Attendance_model extends CI_Model {
     // ================================================================
 
     public function get_today($user_id) {
+        return $this->get_by_date($user_id, date('Y-m-d'));
+    }
+
+    public function get_by_date($user_id, $date) {
         return $this->db
             ->where('user_id', $user_id)
-            ->where('date', date('Y-m-d'))
+            ->where('date', $date)
             ->get($this->table)->row_array();
     }
 

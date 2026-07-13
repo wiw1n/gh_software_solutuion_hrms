@@ -120,6 +120,18 @@ $route['scanner/delete_fingerprint/(:num)']  = 'Scanner/delete_fingerprint/$1';
 $route['scanner/get_settings']               = 'Scanner/get_settings';
 $route['scanner/save_settings']              = 'Scanner/save_settings';
 
+// ── Biometric Devices (ZKTeco) ───────────────────────────────────
+// ADMS push protocol — called by the terminal itself, no auth/session
+$route['iclock/cdata']      = 'Iclock/cdata';
+$route['iclock/getrequest'] = 'Iclock/getrequest';
+$route['iclock/devicecmd']  = 'Iclock/devicecmd';
+$route['iclock/fdata']      = 'Iclock/fdata';
+// Admin page: terminal status, offline file import, punch log
+$route['devices']           = 'Devices/index';
+$route['devices/punches']   = 'Devices/punches';
+$route['devices/upload']    = 'Devices/upload';
+$route['devices/reprocess'] = 'Devices/reprocess';
+
 // ── System Config Routes ─────────────────────────────────────────
 $route['system_config']                              = 'SystemConfig/index';
 $route['system_config/system_settings']              = 'SystemConfig/system_settings';

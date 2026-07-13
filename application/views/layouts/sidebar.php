@@ -88,6 +88,10 @@ $brand_main  = implode(' ', $brand_words);
             <span>Entrance Kiosk</span>
             <i class="fas fa-external-link-alt ms-auto" style="font-size:.6rem;opacity:.6;"></i>
         </a>
+        <a href="<?= base_url('devices') ?>" class="nav-link <?= $seg1 === 'devices' ? 'active' : '' ?>">
+            <i class="fas fa-tablet-alt ni"></i>
+            <span>Biometric Devices</span>
+        </a>
         <?php if (false): // fingerprint kiosk — temporarily replaced by the badge scan station until the .NET scanner program is ready ?>
         <a href="<?= base_url('scanner') ?>" class="nav-link" target="_blank" rel="noopener">
             <i class="fas fa-fingerprint ni"></i>
